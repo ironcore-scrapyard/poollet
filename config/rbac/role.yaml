@@ -9,6 +9,14 @@ rules:
 - apiGroups:
   - compute.onmetal.de
   resources:
+  - machineclasses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - compute.onmetal.de
+  resources:
   - machines
   verbs:
   - create

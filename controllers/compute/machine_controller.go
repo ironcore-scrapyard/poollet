@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -44,14 +45,17 @@ const (
 
 type MachineReconciler struct {
 	client.Client
-	ParentClient client.Client
-	ParentCache  cache.Cache
-	Namespace    string
+	ParentClient    client.Client
+	ParentCache     cache.Cache
+	Namespace       string
+	MachinePoolName string
+	ProviderID      string
 }
 
 //+kubebuilder:rbac:groups=compute.onmetal.de,resources=machines,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=compute.onmetal.de,resources=machines/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=compute.onmetal.de,resources=machines/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups=compute.onmetal.de,resources=machineclasses,verbs=get;list;watch
 
 func (r *MachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
@@ -182,10 +186,30 @@ func (r *MachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return fmt.Errorf("error creating controller: %w", err)
 	}
+	// if machinepool is provided as argument, create machinepool in parent cluster
+	machinePool := &computev1alpha1.MachinePool{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: computev1alpha1.GroupVersion.String(),
+			Kind:       "MachinePool",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: r.MachinePoolName,
+		},
+		Spec: computev1alpha1.MachinePoolSpec{
+			ProviderID: r.ProviderID,
+		},
+	}
+	if err := r.ParentClient.Patch(context.Background(), machinePool, client.Apply, machineFieldOwner); err != nil {
+		return fmt.Errorf("error create/update machinepool for parentcluster: %w", err)
+	}
 
 	if err := c.Watch(
 		source.NewKindWithCache(&computev1alpha1.Machine{}, r.ParentCache),
 		&handler.EnqueueRequestForObject{},
+		predicate.NewPredicateFuncs(func(obj client.Object) bool {
+			machine := obj.(*computev1alpha1.Machine)
+			return machine.Spec.MachinePool.Name == r.MachinePoolName
+		}),
 	); err != nil {
 		return fmt.Errorf("error setting up parent machine watch: %w", err)
 	}

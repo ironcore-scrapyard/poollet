@@ -45,9 +45,11 @@ import (
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
+	hostName string
 )
 
 func init() {
+	hostName, _ = os.Hostname()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(computev1alpha1.AddToScheme(scheme))
@@ -69,6 +71,8 @@ func main() {
 	var probeAddr string
 	var parentKubeconfig string
 	var namespace string
+	var machinepoolname string
+	var providerid string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -76,6 +80,8 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&parentKubeconfig, "parent-kubeconfig", "", "Path pointing to a parent kubeconfig.")
 	flag.StringVar(&namespace, "namespace", corev1.NamespaceDefault, "Namespace to sync machines to.")
+	flag.StringVar(&machinepoolname, "machinepool-name", hostName, "machinepool to create in parent cluster.")
+	flag.StringVar(&providerid, "provider-id", "", "providerid to create in parent cluster.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -84,6 +90,11 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	if machinepoolname == "" {
+		err := fmt.Errorf("machine pool name needs to be set")
+		setupLog.Error(err, "Machine pool name is not defined")
+		os.Exit(1)
+	}
 	parentCfg, err := LoadRESTConfig(parentKubeconfig)
 	if err != nil {
 		setupLog.Error(err, "unable to load target kubeconfig")
@@ -117,10 +128,12 @@ func main() {
 	}
 
 	if err = (&compute.MachineReconciler{
-		Client:       mgr.GetClient(),
-		ParentClient: parentCluster.GetClient(),
-		ParentCache:  parentCluster.GetCache(),
-		Namespace:    namespace,
+		Client:          mgr.GetClient(),
+		ParentClient:    parentCluster.GetClient(),
+		ParentCache:     parentCluster.GetCache(),
+		Namespace:       namespace,
+		MachinePoolName: machinepoolname,
+		ProviderID:      providerid,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Machine")
 		os.Exit(1)
