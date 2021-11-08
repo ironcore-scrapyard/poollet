@@ -5,6 +5,8 @@ categories:
     labels:
       - 'feature'
       - 'enhancement'
+      - 'api-change'
+      - 'compute'
   - title: '🐛 Bug Fixes'
     labels:
       - 'fix'
@@ -14,7 +16,7 @@ categories:
     labels:
       - 'chore'
       - 'dependencies'
-      - 'marketing'
+      - 'documentation'
 change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
 change-title-escapes: '\<*_&' # You can add # and @ to disable mentions, and add ` to disable code blocks.
 version-resolver:
@@ -34,6 +36,9 @@ autolabeler:
   - label: 'api-change'
     files:
       - '/apis/*'
+  - label: 'compute'
+    files:
+      - '/controllers/compute/*'
   - label: 'documentation'
     files:
       - '*.md'

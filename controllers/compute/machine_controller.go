@@ -120,6 +120,10 @@ func (r *MachineReconciler) reconcile(ctx context.Context, log logr.Logger, pare
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: r.Namespace,
 			Name:      partitionletcomputev1alpha1.MachineName(parentMachine.Namespace, parentMachine.Name),
+			Annotations: map[string]string{
+				partitionletcomputev1alpha1.MachineParentNamespaceAnnotation: parentMachine.Namespace,
+				partitionletcomputev1alpha1.MachineParentNameAnnotation:      parentMachine.Name,
+			},
 		},
 		Spec: computev1alpha1.MachineSpec{
 			Hostname:            parentMachine.Spec.Hostname,
