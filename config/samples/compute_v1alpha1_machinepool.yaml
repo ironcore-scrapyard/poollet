@@ -1,0 +1,7 @@
+apiVersion: compute.onmetal.de/v1alpha1
+kind: MachinePool
+metadata:
+  name: my-pool
+spec:
+  providerID: my://custom-pool
+

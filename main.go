@@ -17,9 +17,12 @@ limitations under the License.
 package main
 
 import (
-	"flag"
+	goflag "flag"
 	"fmt"
 	"os"
+	"strings"
+
+	flag "github.com/spf13/pflag"
 
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 
@@ -50,6 +53,8 @@ var (
 
 func init() {
 	hostName, _ = os.Hostname()
+	hostName = strings.ToLower(hostName)
+
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(computev1alpha1.AddToScheme(scheme))
@@ -71,8 +76,9 @@ func main() {
 	var probeAddr string
 	var parentKubeconfig string
 	var namespace string
-	var machinepoolname string
-	var providerid string
+	var machinePoolName string
+	var providerID string
+	var sourceMachinePoolSelector map[string]string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -80,21 +86,29 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&parentKubeconfig, "parent-kubeconfig", "", "Path pointing to a parent kubeconfig.")
 	flag.StringVar(&namespace, "namespace", corev1.NamespaceDefault, "Namespace to sync machines to.")
-	flag.StringVar(&machinepoolname, "machinepool-name", hostName, "machinepool to create in parent cluster.")
-	flag.StringVar(&providerid, "provider-id", "", "providerid to create in parent cluster.")
+	flag.StringVar(&machinePoolName, "machine-pool-name", hostName, "MachinePool to announce in the parent cluster.")
+	flag.StringVar(&providerID, "provider-id", "", "Provider ID (usually <provider-type>://<id>) of the announced MachinePool.")
+	flag.StringToStringVar(&sourceMachinePoolSelector, "source-machine-pool-selector", nil, "Selector of source machine pools")
 	opts := zap.Options{
 		Development: true,
 	}
-	opts.BindFlags(flag.CommandLine)
+	opts.BindFlags(goflag.CommandLine)
+	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	if machinepoolname == "" {
+	if machinePoolName == "" {
 		err := fmt.Errorf("machine pool name needs to be set")
 		setupLog.Error(err, "Machine pool name is not defined")
 		os.Exit(1)
 	}
+	if providerID == "" {
+		err := fmt.Errorf("provider id needs to be set")
+		setupLog.Error(err, "Provider id is not defined")
+		os.Exit(1)
+	}
+
 	parentCfg, err := LoadRESTConfig(parentKubeconfig)
 	if err != nil {
 		setupLog.Error(err, "unable to load target kubeconfig")
@@ -127,22 +141,33 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := (&compute.MachinePoolReconciler{
+		Client:                    mgr.GetClient(),
+		ParentClient:              parentCluster.GetClient(),
+		ParentCache:               parentCluster.GetCache(),
+		MachinePoolName:           machinePoolName,
+		ProviderID:                providerID,
+		SourceMachinePoolSelector: sourceMachinePoolSelector,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "MachinePool")
+		os.Exit(1)
+	}
 	if err = (&compute.MachineReconciler{
 		Client:          mgr.GetClient(),
 		ParentClient:    parentCluster.GetClient(),
 		ParentCache:     parentCluster.GetCache(),
 		Namespace:       namespace,
-		MachinePoolName: machinepoolname,
-		ProviderID:      providerid,
+		MachinePoolName: machinePoolName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Machine")
 		os.Exit(1)
 	}
 	if err = (&compute.MachineStatusReconciler{
-		Client:       mgr.GetClient(),
-		ParentClient: parentCluster.GetClient(),
-		ParentCache:  parentCluster.GetCache(),
-		Namespace:    namespace,
+		Client:          mgr.GetClient(),
+		ParentClient:    parentCluster.GetClient(),
+		ParentCache:     parentCluster.GetCache(),
+		MachinePoolName: machinePoolName,
+		Namespace:       namespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MachineStatus")
 		os.Exit(1)

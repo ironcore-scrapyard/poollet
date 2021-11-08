@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/go-logr/logr"
@@ -34,9 +36,10 @@ import (
 
 type MachineStatusReconciler struct {
 	client.Client
-	ParentClient client.Client
-	ParentCache  cache.Cache
-	Namespace    string
+	ParentClient    client.Client
+	ParentCache     cache.Cache
+	Namespace       string
+	MachinePoolName string
 }
 
 //+kubebuilder:rbac:groups=compute.onmetal.de,resources=machines,verbs=get;list;watch;update;patch
@@ -94,6 +97,10 @@ func (r *MachineStatusReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := c.Watch(
 		source.NewKindWithCache(&computev1alpha1.Machine{}, r.ParentCache),
 		&handler.EnqueueRequestForObject{},
+		predicate.NewPredicateFuncs(func(obj client.Object) bool {
+			machine := obj.(*computev1alpha1.Machine)
+			return machine.Spec.MachinePool.Name == r.MachinePoolName
+		}),
 	); err != nil {
 		return fmt.Errorf("error setting up parent machine watch: %w", err)
 	}

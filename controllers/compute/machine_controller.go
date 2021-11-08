@@ -45,11 +45,11 @@ const (
 
 type MachineReconciler struct {
 	client.Client
-	ParentClient    client.Client
-	ParentCache     cache.Cache
-	Namespace       string
-	MachinePoolName string
-	ProviderID      string
+	ParentClient              client.Client
+	ParentCache               cache.Cache
+	Namespace                 string
+	MachinePoolName           string
+	SourceMachinePoolSelector map[string]string
 }
 
 //+kubebuilder:rbac:groups=compute.onmetal.de,resources=machines,verbs=get;list;watch;create;update;patch;delete
@@ -117,10 +117,11 @@ func (r *MachineReconciler) reconcile(ctx context.Context, log logr.Logger, pare
 			Name:      partitionletcomputev1alpha1.MachineName(parentMachine.Namespace, parentMachine.Name),
 		},
 		Spec: computev1alpha1.MachineSpec{
-			Hostname:     parentMachine.Spec.Hostname,
-			MachineClass: corev1.LocalObjectReference{Name: machineClass.Name},
-			Image:        parentMachine.Spec.Image,
-			Interfaces:   parentMachine.Spec.Interfaces,
+			Hostname:            parentMachine.Spec.Hostname,
+			MachineClass:        corev1.LocalObjectReference{Name: machineClass.Name},
+			Image:               parentMachine.Spec.Image,
+			Interfaces:          parentMachine.Spec.Interfaces,
+			MachinePoolSelector: r.SourceMachinePoolSelector,
 		},
 	}
 	log.V(1).Info("Applying machine", "Machine", machine.Name)
@@ -185,22 +186,6 @@ func (r *MachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	})
 	if err != nil {
 		return fmt.Errorf("error creating controller: %w", err)
-	}
-	// if machinepool is provided as argument, create machinepool in parent cluster
-	machinePool := &computev1alpha1.MachinePool{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: computev1alpha1.GroupVersion.String(),
-			Kind:       "MachinePool",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: r.MachinePoolName,
-		},
-		Spec: computev1alpha1.MachinePoolSpec{
-			ProviderID: r.ProviderID,
-		},
-	}
-	if err := r.ParentClient.Patch(context.Background(), machinePool, client.Apply, machineFieldOwner); err != nil {
-		return fmt.Errorf("error create/update machinepool for parentcluster: %w", err)
 	}
 
 	if err := c.Watch(
