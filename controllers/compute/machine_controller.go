@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/go-logr/logr"
@@ -28,7 +30,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -39,14 +40,18 @@ import (
 )
 
 const (
-	machineFinalizer  = "partitionlet.onmetal.de/machine"
-	machineFieldOwner = client.FieldOwner("partitionlet.onmetal.de/machine")
+	machineFinalizer         = "partitionlet.onmetal.de/machine"
+	machineFieldOwner        = client.FieldOwner("partitionlet.onmetal.de/machine")
+	machineMachineClassField = ".spec.machineClass.name"
 )
 
 type MachineReconciler struct {
 	client.Client
-	ParentClient              client.Client
-	ParentCache               cache.Cache
+	ParentClient client.Client
+
+	ParentCache        cache.Cache
+	ParentFieldIndexer client.FieldIndexer
+
 	Namespace                 string
 	MachinePoolName           string
 	SourceMachinePoolSelector map[string]string
@@ -139,14 +144,16 @@ func (r *MachineReconciler) reconcile(ctx context.Context, log logr.Logger, pare
 		return ctrl.Result{}, fmt.Errorf("error applying machine: %w", err)
 	}
 
-	base := parentMachine.DeepCopy()
+	log.V(1).Info("Updating parent machine status")
+	baseParentMachine := parentMachine.DeepCopy()
+	parentMachine.Status.State = machine.Status.State
 	conditionutils.MustUpdateSlice(&parentMachine.Status.Conditions, string(partitionletcomputev1alpha1.MachineSynced),
 		conditionutils.UpdateStatus(corev1.ConditionTrue),
 		conditionutils.UpdateReason("Applied"),
 		conditionutils.UpdateMessage("Successfully applied machine"),
 		conditionutils.UpdateObserved(parentMachine),
 	)
-	if err := r.ParentClient.Status().Patch(ctx, parentMachine, client.MergeFrom(base)); err != nil {
+	if err := r.ParentClient.Status().Patch(ctx, parentMachine, client.MergeFrom(baseParentMachine)); err != nil {
 		return ctrl.Result{}, fmt.Errorf("could not update parent status: %w", err)
 	}
 	return ctrl.Result{}, nil
@@ -180,6 +187,16 @@ func (r *MachineReconciler) delete(ctx context.Context, log logr.Logger, parentM
 }
 
 func (r *MachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	log := ctrl.Log.WithName("machine-reconciler")
+	ctx := ctrl.LoggerInto(context.Background(), log)
+
+	if err := r.ParentFieldIndexer.IndexField(ctx, &computev1alpha1.Machine{}, machineMachineClassField, func(obj client.Object) []string {
+		machine := obj.(*computev1alpha1.Machine)
+		return []string{machine.Spec.MachineClass.Name}
+	}); err != nil {
+		return fmt.Errorf("error setting up %s indexer: %w", machineMachineClassField, err)
+	}
+
 	c, err := controller.New("machine", mgr, controller.Options{
 		Reconciler: r,
 		Log:        mgr.GetLogger().WithName("machine"),
@@ -197,6 +214,29 @@ func (r *MachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}),
 	); err != nil {
 		return fmt.Errorf("error setting up parent machine watch: %w", err)
+	}
+
+	if err := c.Watch(
+		source.NewKindWithCache(&computev1alpha1.MachineClass{}, r.ParentCache),
+		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+			parentClass := obj.(*computev1alpha1.MachineClass)
+			list := &computev1alpha1.MachineList{}
+			if err := r.ParentClient.List(ctx, list, client.MatchingFields{machineMachineClassField: parentClass.Name}); err != nil {
+				log.Error(err, "Error listing parent machines")
+				return nil
+			}
+
+			res := make([]reconcile.Request, 0, len(list.Items))
+			for _, item := range list.Items {
+				res = append(res, reconcile.Request{
+					NamespacedName: client.ObjectKeyFromObject(&item),
+				})
+			}
+			return res
+		}),
+		&predicate.GenerationChangedPredicate{},
+	); err != nil {
+		return fmt.Errorf("error setting up parent machine class watch: %w", err)
 	}
 
 	if err := c.Watch(

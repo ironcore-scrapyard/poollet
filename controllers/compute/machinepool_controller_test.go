@@ -15,8 +15,6 @@
 package compute
 
 import (
-	"time"
-
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -27,11 +25,6 @@ import (
 )
 
 var _ = Describe("MachinePoolController", func() {
-	const (
-		timeout  = 2 * time.Second
-		interval = 100 * time.Millisecond
-	)
-
 	ctx := controllerruntime.SetupSignalHandler()
 	_ = SetupTest(ctx)
 

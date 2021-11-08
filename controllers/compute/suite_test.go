@@ -19,6 +19,7 @@ package compute
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/onmetal/controller-utils/kustomizeutils"
 	corev1 "k8s.io/api/core/v1"
@@ -55,6 +56,13 @@ func TestAPIs(t *testing.T) {
 var sourceMachinePoolLabels = map[string]string{
 	"machinepool-kind": "source",
 }
+
+const (
+	machinePoolName       = "my-pool"
+	machinePoolProviderID = "custom://pool"
+	timeout               = 2 * time.Second
+	interval              = 100 * time.Millisecond
+)
 
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
@@ -109,8 +117,17 @@ func SetupTest(ctx context.Context) *corev1.Namespace {
 			Client:                    k8sManager.GetClient(),
 			ParentClient:              k8sManager.GetClient(),
 			ParentCache:               k8sManager.GetCache(),
-			MachinePoolName:           "my-pool",
-			ProviderID:                "custom://pool",
+			MachinePoolName:           machinePoolName,
+			ProviderID:                machinePoolProviderID,
+			SourceMachinePoolSelector: sourceMachinePoolLabels,
+		}).SetupWithManager(k8sManager)).To(Succeed())
+		Expect((&MachineReconciler{
+			Namespace:                 ns.Name,
+			Client:                    k8sManager.GetClient(),
+			ParentClient:              k8sManager.GetClient(),
+			ParentCache:               k8sManager.GetCache(),
+			ParentFieldIndexer:        k8sManager.GetFieldIndexer(),
+			MachinePoolName:           machinePoolName,
 			SourceMachinePoolSelector: sourceMachinePoolLabels,
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
@@ -123,6 +140,7 @@ func SetupTest(ctx context.Context) *corev1.Namespace {
 		cancel()
 		Expect(k8sClient.Delete(ctx, ns)).To(Succeed(), "failed to delete test namespace")
 		Expect(k8sClient.DeleteAllOf(ctx, &computev1alpha1.MachinePool{})).To(Succeed())
+		Expect(k8sClient.DeleteAllOf(ctx, &computev1alpha1.MachineClass{})).To(Succeed())
 	})
 
 	return ns
