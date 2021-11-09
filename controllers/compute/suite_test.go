@@ -18,6 +18,8 @@ package compute
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -68,6 +70,9 @@ var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	onmetalCRDs := &apiextensionsv1.CustomResourceDefinitionList{}
+	if os.Getenv("GITHUB_ACTIONS") == "true" {
+		Expect(os.MkdirAll(filepath.Join("git@github.com", "onmetal", "onmetal-api", "config"), 0777))
+	}
 	Expect(kustomizeutils.RunKustomizeIntoList(".", scheme.Codecs.UniversalDeserializer(), onmetalCRDs)).To(Succeed())
 
 	By("bootstrapping test environment")
@@ -129,6 +134,15 @@ func SetupTest(ctx context.Context) *corev1.Namespace {
 			ParentFieldIndexer:        k8sManager.GetFieldIndexer(),
 			MachinePoolName:           machinePoolName,
 			SourceMachinePoolSelector: sourceMachinePoolLabels,
+		}).SetupWithManager(k8sManager)).To(Succeed())
+		Expect((&ConsoleReconciler{
+			Scheme:             k8sManager.GetScheme(),
+			Client:             k8sManager.GetClient(),
+			ParentClient:       k8sManager.GetClient(),
+			ParentFieldIndexer: k8sManager.GetFieldIndexer(),
+			ParentCache:        k8sManager.GetCache(),
+			Namespace:          ns.Name,
+			MachinePoolName:    machinePoolName,
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
 		go func() {

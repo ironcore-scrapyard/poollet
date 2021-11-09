@@ -18,9 +18,9 @@ import (
 	"context"
 	"fmt"
 
-	"sigs.k8s.io/controller-runtime/pkg/cache"
+	partitionlethandler "github.com/onmetal/partitionlet/handler"
 
-	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 
 	"github.com/go-logr/logr"
 	"github.com/onmetal/controller-utils/conditionutils"
@@ -245,26 +245,10 @@ func (r *MachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	if err := c.Watch(
 		&source.Kind{Type: &computev1alpha1.Machine{}},
-		handler.EnqueueRequestsFromMapFunc(func(object client.Object) []reconcile.Request {
-			annotations := object.GetAnnotations()
-			parentNamespace, ok := annotations[partitionletcomputev1alpha1.MachineParentNamespaceAnnotation]
-			if !ok {
-				return nil
-			}
-			parentName, ok := annotations[partitionletcomputev1alpha1.MachineParentNameAnnotation]
-			if !ok {
-				return nil
-			}
-
-			return []reconcile.Request{
-				{
-					NamespacedName: types.NamespacedName{
-						Namespace: parentNamespace,
-						Name:      parentName,
-					},
-				},
-			}
-		}),
+		&partitionlethandler.EnqueueRequestForParentObject{
+			ParentNamespaceAnnotation: partitionletcomputev1alpha1.MachineParentNamespaceAnnotation,
+			ParentNameAnnotation:      partitionletcomputev1alpha1.MachineParentNameAnnotation,
+		},
 	); err != nil {
 		return fmt.Errorf("error setting up machine watch: %w", err)
 	}

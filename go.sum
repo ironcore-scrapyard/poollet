@@ -378,6 +378,10 @@ github.com/onmetal/onmetal-api v0.0.9-0.20211011142052-85c05faae15c h1:Dq+GW5OK3
 github.com/onmetal/onmetal-api v0.0.9-0.20211011142052-85c05faae15c/go.mod h1:auruxgCzeWtNFJ6wQVfXQUUcEce9RLJh8pGlDx8HCVA=
 github.com/onmetal/onmetal-api v0.0.9-0.20211103093153-5b2c28a5f2d4 h1:qktYibkYOsbQGplTDBTFZ2lshNracAH/sNoN05qgAAI=
 github.com/onmetal/onmetal-api v0.0.9-0.20211103093153-5b2c28a5f2d4/go.mod h1:jPRmZQHMGrUhP4wwc795tC08qMmVh11ridStgD1EJxY=
+github.com/onmetal/onmetal-api v0.0.9-0.20211108112221-b2f133ade4cf h1:JqBGi91mNmnQVk5t4Z+0b8dSyPEX6/nMvlhUiT6UBSI=
+github.com/onmetal/onmetal-api v0.0.9-0.20211108112221-b2f133ade4cf/go.mod h1:jPRmZQHMGrUhP4wwc795tC08qMmVh11ridStgD1EJxY=
+github.com/onmetal/onmetal-api v0.0.9-0.20211108171107-ed87541379ca h1:8PO1G8TaME6CDnc8bCtHannxuhMvQDECqZBcq+6EZbU=
+github.com/onmetal/onmetal-api v0.0.9-0.20211108171107-ed87541379ca/go.mod h1:jPRmZQHMGrUhP4wwc795tC08qMmVh11ridStgD1EJxY=
 github.com/onsi/ginkgo v0.0.0-20170829012221-11459a886d9c/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.12.1/go.mod h1:zj2OWP4+oCPe1qIXoGWkgMRwljMUYCdkwsT2108oapk=

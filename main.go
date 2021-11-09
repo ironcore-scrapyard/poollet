@@ -174,6 +174,18 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "MachineStatus")
 		os.Exit(1)
 	}
+	if err = (&compute.ConsoleReconciler{
+		Scheme:             mgr.GetScheme(),
+		Client:             mgr.GetClient(),
+		ParentClient:       parentCluster.GetClient(),
+		ParentCache:        parentCluster.GetCache(),
+		ParentFieldIndexer: parentCluster.GetFieldIndexer(),
+		Namespace:          namespace,
+		MachinePoolName:    machinePoolName,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Console")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
