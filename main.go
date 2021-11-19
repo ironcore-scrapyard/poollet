@@ -79,6 +79,8 @@ func main() {
 	var machinePoolName string
 	var providerID string
 	var sourceMachinePoolSelector map[string]string
+	var machinePoolLabels map[string]string
+	var machinePoolAnnotations map[string]string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -89,6 +91,8 @@ func main() {
 	flag.StringVar(&machinePoolName, "machine-pool-name", hostName, "MachinePool to announce in the parent cluster.")
 	flag.StringVar(&providerID, "provider-id", "", "Provider ID (usually <provider-type>://<id>) of the announced MachinePool.")
 	flag.StringToStringVar(&sourceMachinePoolSelector, "source-machine-pool-selector", nil, "Selector of source machine pools")
+	flag.StringToStringVar(&machinePoolLabels, "machine-pool-labels", nil, "Labels to apply to the machine pool upon startup.")
+	flag.StringToStringVar(&machinePoolAnnotations, "machine-pool-annotations", nil, "Annotations to apply to the machine pool upon startup.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -147,6 +151,8 @@ func main() {
 		ParentCache:               parentCluster.GetCache(),
 		MachinePoolName:           machinePoolName,
 		ProviderID:                providerID,
+		MachinePoolLabels:         machinePoolLabels,
+		MachinePoolAnnotations:    machinePoolAnnotations,
 		SourceMachinePoolSelector: sourceMachinePoolSelector,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MachinePool")

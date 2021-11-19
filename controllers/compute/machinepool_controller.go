@@ -46,6 +46,8 @@ type MachinePoolReconciler struct {
 
 	MachinePoolName           string
 	ProviderID                string
+	MachinePoolLabels         map[string]string
+	MachinePoolAnnotations    map[string]string
 	SourceMachinePoolSelector map[string]string
 }
 
@@ -107,7 +109,9 @@ func (r *MachinePoolReconciler) birthCry(ctx context.Context) error {
 			Kind:       "MachinePool",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: r.MachinePoolName,
+			Name:        r.MachinePoolName,
+			Labels:      r.MachinePoolLabels,
+			Annotations: r.MachinePoolAnnotations,
 		},
 		Spec: computev1alpha1.MachinePoolSpec{
 			ProviderID: r.ProviderID,
