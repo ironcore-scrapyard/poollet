@@ -96,9 +96,10 @@ func (r *MachinePoolReconciler) reconcile(ctx context.Context, log logr.Logger, 
 
 	base := pool.DeepCopy()
 	pool.Status.AvailableMachineClasses = availableClasses
-	log.Info("Updating available classes")
+	pool.Status.State = computev1alpha1.MachinePoolStateReady
+	log.Info("Updating machine pool status")
 	if err := r.ParentClient.Status().Patch(ctx, pool, client.MergeFrom(base)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("error updating machine classes: %w", err)
+		return ctrl.Result{}, fmt.Errorf("error updating machine pool status: %w", err)
 	}
 	log.Info("Successfully synced pool")
 	return ctrl.Result{}, nil
