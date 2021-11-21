@@ -7,9 +7,52 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - compute.onmetal.de
+  resources:
+  - consoles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - compute.onmetal.de
+  resources:
+  - consoles/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - compute.onmetal.de
+  resources:
+  - consoles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - compute.onmetal.de
   resources:
   - machineclasses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - compute.onmetal.de
+  resources:
+  - machinepools
   verbs:
   - get
   - list

@@ -65,6 +65,11 @@ type ConsoleReconciler struct {
 	MachinePoolName string
 }
 
+//+kubebuilder:rbac:groups=compute.onmetal.de,resources=consoles,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=compute.onmetal.de,resources=consoles/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=compute.onmetal.de,resources=consoles/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+
 func (r *ConsoleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 	parentConsole := &computev1alpha1.Console{}
@@ -105,7 +110,7 @@ func (r *ConsoleReconciler) delete(ctx context.Context, log logr.Logger, parentC
 	}
 	var goneCt int
 	for _, obj := range objs {
-		if err := r.ParentClient.Delete(ctx, obj); err != nil {
+		if err := r.Delete(ctx, obj); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return ctrl.Result{}, fmt.Errorf("error deleting object: %w", err)
 			}

@@ -51,6 +51,8 @@ type MachinePoolReconciler struct {
 	SourceMachinePoolSelector map[string]string
 }
 
+//+kubebuilder:rbac:groups=compute.onmetal.de,resources=machinepools,verbs=get;list;watch
+
 func (r *MachinePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 
