@@ -17,6 +17,8 @@ package compute
 import (
 	"context"
 
+	commonv1alpha1 "github.com/onmetal/onmetal-api/apis/common/v1alpha1"
+
 	partitionletcomputev1alpha1 "github.com/onmetal/partitionlet/apis/compute/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -61,6 +63,14 @@ var _ = Describe("MachineController", func() {
 				MachinePool: corev1.LocalObjectReference{
 					Name: machinePoolName,
 				},
+				Interfaces: []computev1alpha1.Interface{
+					{
+						Name: "myinterface",
+						Target: corev1.LocalObjectReference{
+							Name: "my-subnet",
+						},
+					},
+				},
 			},
 		}
 		Expect(k8sClient.Create(ctx, parentMachine)).To(Succeed())
@@ -77,7 +87,37 @@ var _ = Describe("MachineController", func() {
 				MachineClass:        corev1.LocalObjectReference{Name: machineClass.Name},
 				MachinePoolSelector: sourceMachinePoolLabels,
 				Image:               parentMachine.Spec.Image,
+				Interfaces: []computev1alpha1.Interface{
+					{
+						Name: "myinterface",
+						Target: corev1.LocalObjectReference{
+							Name: "my-subnet",
+						},
+					},
+				},
 			}))
+		}, timeout, interval).Should(Succeed())
+
+		By("patching the parent machine's interface status")
+		baseParentMachine := parentMachine.DeepCopy()
+		parentMachine.Status.Interfaces = []computev1alpha1.InterfaceStatus{{
+			Name: "myinterface",
+			IP:   commonv1alpha1.MustParseIPAddr("10.0.0.1"),
+		}}
+		Expect(k8sClient.Status().Patch(ctx, parentMachine, client.MergeFrom(baseParentMachine))).To(Succeed())
+
+		By("waiting for the machine interfaces to be synced")
+		Eventually(func(g Gomega) {
+			key := client.ObjectKey{Namespace: ns.Name, Name: partitionletcomputev1alpha1.MachineName(ns.Name, parentMachine.Name)}
+			machine := &computev1alpha1.Machine{}
+			err := k8sClient.Get(ctx, key, machine)
+			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
+			g.Expect(err).NotTo(HaveOccurred())
+
+			g.Expect(machine.Status.Interfaces).To(Equal([]computev1alpha1.InterfaceStatus{{
+				Name: "myinterface",
+				IP:   commonv1alpha1.MustParseIPAddr("10.0.0.1"),
+			}}))
 		}, timeout, interval).Should(Succeed())
 	})
 

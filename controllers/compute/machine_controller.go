@@ -18,6 +18,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/onmetal/onmetal-api/equality"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+
 	partitionlethandler "github.com/onmetal/partitionlet/handler"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -133,7 +136,7 @@ func (r *MachineReconciler) reconcile(ctx context.Context, log logr.Logger, pare
 			MachinePoolSelector: r.SourceMachinePoolSelector,
 		},
 	}
-	log.V(1).Info("Applying machine", "Machine", machine.Name)
+	log.V(1).Info("Applying machine spec", "Machine", machine.Name)
 	if err := r.Patch(ctx, machine, client.Apply, machineFieldOwner); err != nil {
 		base := parentMachine.DeepCopy()
 		conditionutils.MustUpdateSlice(&parentMachine.Status.Conditions, string(partitionletcomputev1alpha1.MachineSynced),
@@ -146,6 +149,24 @@ func (r *MachineReconciler) reconcile(ctx context.Context, log logr.Logger, pare
 			log.Error(err, "Could not update parent status")
 		}
 		return ctrl.Result{}, fmt.Errorf("error applying machine: %w", err)
+	}
+
+	log.V(1).Info("Applying machine status", "Machine", machine.Name)
+	baseMachine := machine.DeepCopy()
+	machine.Status.VolumeClaims = parentMachine.Status.VolumeClaims
+	machine.Status.Interfaces = parentMachine.Status.Interfaces
+	if err := r.Status().Patch(ctx, machine, client.MergeFrom(baseMachine)); err != nil {
+		base := parentMachine.DeepCopy()
+		conditionutils.MustUpdateSlice(&parentMachine.Status.Conditions, string(partitionletcomputev1alpha1.MachineSynced),
+			conditionutils.UpdateStatus(corev1.ConditionFalse),
+			conditionutils.UpdateReason("ApplyStatusFailed"),
+			conditionutils.UpdateMessage(fmt.Sprintf("Could not apply the machine status: %v", err)),
+			conditionutils.UpdateObserved(parentMachine),
+		)
+		if err := r.ParentClient.Status().Patch(ctx, parentMachine, client.MergeFrom(base)); err != nil {
+			log.Error(err, "Could not update parent status")
+		}
+		return ctrl.Result{}, fmt.Errorf("error applying machine status: %w", err)
 	}
 
 	log.V(1).Info("Updating parent machine status")
@@ -216,6 +237,16 @@ func (r *MachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			machine := obj.(*computev1alpha1.Machine)
 			return machine.Spec.MachinePool.Name == r.MachinePoolName
 		}),
+		predicate.Funcs{
+			UpdateFunc: func(event event.UpdateEvent) bool {
+				oldMachine, newMachine := event.ObjectOld.(*computev1alpha1.Machine).DeepCopy(), event.ObjectNew.(*computev1alpha1.Machine).DeepCopy()
+				oldMachine.ResourceVersion = ""
+				newMachine.ResourceVersion = ""
+				oldMachine.Status.Conditions = nil
+				newMachine.Status.Conditions = nil
+				return !equality.Semantic.DeepEqual(oldMachine, newMachine)
+			},
+		},
 	); err != nil {
 		return fmt.Errorf("error setting up parent machine watch: %w", err)
 	}
@@ -248,6 +279,16 @@ func (r *MachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		&partitionlethandler.EnqueueRequestForParentObject{
 			ParentNamespaceAnnotation: partitionletcomputev1alpha1.MachineParentNamespaceAnnotation,
 			ParentNameAnnotation:      partitionletcomputev1alpha1.MachineParentNameAnnotation,
+		},
+		predicate.Funcs{
+			UpdateFunc: func(event event.UpdateEvent) bool {
+				oldMachine, newMachine := event.ObjectOld.(*computev1alpha1.Machine).DeepCopy(), event.ObjectNew.(*computev1alpha1.Machine).DeepCopy()
+				oldMachine.ResourceVersion = ""
+				newMachine.ResourceVersion = ""
+				oldMachine.Status.Conditions = nil
+				newMachine.Status.Conditions = nil
+				return !equality.Semantic.DeepEqual(oldMachine, newMachine)
+			},
 		},
 	); err != nil {
 		return fmt.Errorf("error setting up machine watch: %w", err)

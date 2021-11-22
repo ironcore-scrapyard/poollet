@@ -170,16 +170,6 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Machine")
 		os.Exit(1)
 	}
-	if err = (&compute.MachineStatusReconciler{
-		Client:          mgr.GetClient(),
-		ParentClient:    parentCluster.GetClient(),
-		ParentCache:     parentCluster.GetCache(),
-		MachinePoolName: machinePoolName,
-		Namespace:       namespace,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "MachineStatus")
-		os.Exit(1)
-	}
 	if err = (&compute.ConsoleReconciler{
 		Scheme:             mgr.GetScheme(),
 		Client:             mgr.GetClient(),
