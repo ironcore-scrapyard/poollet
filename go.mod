@@ -19,7 +19,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.22.2
 	k8s.io/apimachinery v0.22.3
 	k8s.io/client-go v0.22.3
-	sigs.k8s.io/controller-runtime v0.10.2
+	sigs.k8s.io/controller-runtime v0.10.3
 )
 
 require (
@@ -31,7 +31,6 @@ require (
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
 	github.com/PuerkitoBio/purell v1.1.1 // indirect
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
-	github.com/adracus/reflcompare v0.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.0.2 // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect

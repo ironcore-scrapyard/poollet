@@ -63,7 +63,6 @@ github.com/PuerkitoBio/purell v1.1.1 h1:WEQqlqaGbrPkxLJWfBwQmfEAE1Z7ONdDLqrN38tN
 github.com/PuerkitoBio/purell v1.1.1/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 h1:d+Bc7a5rLufV/sSk/8dngufqelfh6jnri85riMAaF/M=
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
-github.com/adracus/reflcompare v0.1.0 h1:jx/afiw23FgO1e+WrPDKEVIt73Ej34pPUJjngGrDeuw=
 github.com/adracus/reflcompare v0.1.0/go.mod h1:ZKXj/WX9CdSFeTJMK+sn+FWyaClc5R6BZcGDg/N07oM=
 github.com/ahmetb/gen-crd-api-reference-docs v0.3.0/go.mod h1:TdjdkYhlOifCQWPs1UdTma97kQQMozf5h26hTuG70u8=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
@@ -370,18 +369,8 @@ github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=
 github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
-github.com/onmetal/controller-utils v0.1.4 h1:oYIykuKumRuFjE5LFoyuKQTfVGLrPAK0FDV+UDK2bG8=
-github.com/onmetal/controller-utils v0.1.4/go.mod h1:oX2u2bY6/578jOoK4F9qYTXs0e3PnO/+SNfUEQHrquw=
 github.com/onmetal/controller-utils v0.2.0 h1:a1vmNS+ktHRkArk55KLEtTIpakTEphY32Yg3mauukW8=
 github.com/onmetal/controller-utils v0.2.0/go.mod h1:oX2u2bY6/578jOoK4F9qYTXs0e3PnO/+SNfUEQHrquw=
-github.com/onmetal/onmetal-api v0.0.9-0.20211011142052-85c05faae15c h1:Dq+GW5OK3IXWPOLosSuy8Me3ulKtk5+8SjkfJLYqdE4=
-github.com/onmetal/onmetal-api v0.0.9-0.20211011142052-85c05faae15c/go.mod h1:auruxgCzeWtNFJ6wQVfXQUUcEce9RLJh8pGlDx8HCVA=
-github.com/onmetal/onmetal-api v0.0.9-0.20211103093153-5b2c28a5f2d4 h1:qktYibkYOsbQGplTDBTFZ2lshNracAH/sNoN05qgAAI=
-github.com/onmetal/onmetal-api v0.0.9-0.20211103093153-5b2c28a5f2d4/go.mod h1:jPRmZQHMGrUhP4wwc795tC08qMmVh11ridStgD1EJxY=
-github.com/onmetal/onmetal-api v0.0.9-0.20211108112221-b2f133ade4cf h1:JqBGi91mNmnQVk5t4Z+0b8dSyPEX6/nMvlhUiT6UBSI=
-github.com/onmetal/onmetal-api v0.0.9-0.20211108112221-b2f133ade4cf/go.mod h1:jPRmZQHMGrUhP4wwc795tC08qMmVh11ridStgD1EJxY=
-github.com/onmetal/onmetal-api v0.0.9-0.20211108171107-ed87541379ca h1:8PO1G8TaME6CDnc8bCtHannxuhMvQDECqZBcq+6EZbU=
-github.com/onmetal/onmetal-api v0.0.9-0.20211108171107-ed87541379ca/go.mod h1:jPRmZQHMGrUhP4wwc795tC08qMmVh11ridStgD1EJxY=
 github.com/onmetal/onmetal-api v0.0.9-0.20211117083923-0ec2023f7c3a h1:bisV6wzuqBcEHQtS14tSPeQhBEGas9EK4Ko+b95Yr1U=
 github.com/onmetal/onmetal-api v0.0.9-0.20211117083923-0ec2023f7c3a/go.mod h1:jPRmZQHMGrUhP4wwc795tC08qMmVh11ridStgD1EJxY=
 github.com/onsi/ginkgo v0.0.0-20170829012221-11459a886d9c/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
@@ -992,8 +981,9 @@ rsc.io/binaryregexp v0.2.0/go.mod h1:qTv7/COck+e2FymRvadv62gMdZztPaShugOCi3I+8D8
 rsc.io/quote/v3 v3.1.0/go.mod h1:yEA65RcK8LyAZtP9Kv3t0HmxON59tX3rD+tICJqUlj0=
 rsc.io/sampler v1.3.0/go.mod h1:T1hPZKmBbMNahiBKFy5HrXp6adAjACjK9JXDnKaTXpA=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.22/go.mod h1:LEScyzhFmoF5pso/YSeBstl57mOzx9xlU9n85RGrDQg=
-sigs.k8s.io/controller-runtime v0.10.2 h1:jW8qiY+yMnnPx6O9hu63tgcwaKzd1yLYui+mpvClOOc=
 sigs.k8s.io/controller-runtime v0.10.2/go.mod h1:CQp8eyUQZ/Q7PJvnIrB6/hgfTC1kBkGylwsLgOQi1WY=
+sigs.k8s.io/controller-runtime v0.10.3 h1:s5Ttmw/B4AuIbwrXD3sfBkXwnPMMWrqpVj4WRt1dano=
+sigs.k8s.io/controller-runtime v0.10.3/go.mod h1:CQp8eyUQZ/Q7PJvnIrB6/hgfTC1kBkGylwsLgOQi1WY=
 sigs.k8s.io/kustomize/api v0.10.0 h1:HK5gVSlVV24AmZ2fTHUIchZ6osaYNegK1jAdx7lJ/mU=
 sigs.k8s.io/kustomize/api v0.10.0/go.mod h1:syysqD8Oews9oghLfCitMCuCPxxu4MErSJ6uw8ge9jk=
 sigs.k8s.io/kustomize/kyaml v0.12.0 h1:k08l8SLwnKa/eXXB5GW2/OnEc/4gJF90VDFebsOwqw4=
