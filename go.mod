@@ -11,7 +11,7 @@ require (
 	github.com/onmetal/controller-utils v0.2.0
 	github.com/onmetal/onmetal-api v0.0.9-0.20211117083923-0ec2023f7c3a
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.16.0
+	github.com/onsi/gomega v1.17.0
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5 // indirect
 	golang.org/x/oauth2 v0.0.0-20210402161424-2e8d93401602 // indirect
