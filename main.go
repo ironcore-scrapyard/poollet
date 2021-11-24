@@ -23,10 +23,6 @@ import (
 	"strings"
 
 	flag "github.com/spf13/pflag"
-
-	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
-
-	"github.com/onmetal/partitionlet/controllers/compute"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -42,6 +38,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
+	"github.com/onmetal/partitionlet/controllers/compute"
+	"github.com/onmetal/partitionlet/controllers/storage"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -77,10 +77,13 @@ func main() {
 	var parentKubeconfig string
 	var namespace string
 	var machinePoolName string
-	var providerID string
+	var storagePoolName string
+	var machinePoolProviderID string
+	var storagePoolProviderID string
 	var sourceMachinePoolSelector map[string]string
 	var machinePoolLabels map[string]string
 	var machinePoolAnnotations map[string]string
+	var sourceStoragePoolSelector map[string]string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -89,10 +92,13 @@ func main() {
 	flag.StringVar(&parentKubeconfig, "parent-kubeconfig", "", "Path pointing to a parent kubeconfig.")
 	flag.StringVar(&namespace, "namespace", corev1.NamespaceDefault, "Namespace to sync machines to.")
 	flag.StringVar(&machinePoolName, "machine-pool-name", hostName, "MachinePool to announce in the parent cluster.")
-	flag.StringVar(&providerID, "provider-id", "", "Provider ID (usually <provider-type>://<id>) of the announced MachinePool.")
+	flag.StringVar(&machinePoolProviderID, "machine-pool-provider-id", "", "Provider ID (usually <provider-type>://<id>) of the announced MachinePool.")
 	flag.StringToStringVar(&sourceMachinePoolSelector, "source-machine-pool-selector", nil, "Selector of source machine pools")
 	flag.StringToStringVar(&machinePoolLabels, "machine-pool-labels", nil, "Labels to apply to the machine pool upon startup.")
 	flag.StringToStringVar(&machinePoolAnnotations, "machine-pool-annotations", nil, "Annotations to apply to the machine pool upon startup.")
+	flag.StringVar(&storagePoolName, "storage-pool-name", hostName, "StoragePool to announce in the parent cluster.")
+	flag.StringVar(&storagePoolProviderID, "storage-pool-provider-id", "", "Provider ID (usually <provider-type>://<id>) of the announced StoragePool.")
+	flag.StringToStringVar(&sourceStoragePoolSelector, "source-storage-pool-selector", nil, "Selector of source storage pools")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -107,9 +113,20 @@ func main() {
 		setupLog.Error(err, "Machine pool name is not defined")
 		os.Exit(1)
 	}
-	if providerID == "" {
-		err := fmt.Errorf("provider id needs to be set")
-		setupLog.Error(err, "Provider id is not defined")
+	if machinePoolProviderID == "" {
+		err := fmt.Errorf("machine pool provider id needs to be set")
+		setupLog.Error(err, "Machine pool provider id is not defined")
+		os.Exit(1)
+	}
+
+	if storagePoolName == "" {
+		err := fmt.Errorf("storage pool name needs to be set")
+		setupLog.Error(err, "Storage pool name is not defined")
+		os.Exit(1)
+	}
+	if storagePoolProviderID == "" {
+		err := fmt.Errorf("storage pool provider id needs to be set")
+		setupLog.Error(err, "Storage pool provider id is not defined")
 		os.Exit(1)
 	}
 
@@ -150,7 +167,7 @@ func main() {
 		ParentClient:              parentCluster.GetClient(),
 		ParentCache:               parentCluster.GetCache(),
 		MachinePoolName:           machinePoolName,
-		ProviderID:                providerID,
+		ProviderID:                machinePoolProviderID,
 		MachinePoolLabels:         machinePoolLabels,
 		MachinePoolAnnotations:    machinePoolAnnotations,
 		SourceMachinePoolSelector: sourceMachinePoolSelector,
@@ -180,6 +197,17 @@ func main() {
 		MachinePoolName:    machinePoolName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Console")
+		os.Exit(1)
+	}
+	if err := (&storage.StoragePoolReconciler{
+		Client:                    mgr.GetClient(),
+		ParentClient:              parentCluster.GetClient(),
+		ParentCache:               parentCluster.GetCache(),
+		StoragePoolName:           storagePoolName,
+		ProviderID:                storagePoolProviderID,
+		SourceStoragePoolSelector: sourceStoragePoolSelector,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "StoragePool")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
