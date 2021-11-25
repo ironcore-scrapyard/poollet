@@ -130,6 +130,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if storagePoolName == "" {
+		err := fmt.Errorf("storage pool name needs to be set")
+		setupLog.Error(err, "storage pool name is not defined")
+		os.Exit(1)
+	}
 	parentCfg, err := LoadRESTConfig(parentKubeconfig)
 	if err != nil {
 		setupLog.Error(err, "unable to load target kubeconfig")
@@ -175,6 +180,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "MachinePool")
 		os.Exit(1)
 	}
+
 	if err = (&compute.MachineReconciler{
 		Client:                    mgr.GetClient(),
 		ParentClient:              parentCluster.GetClient(),
@@ -198,6 +204,18 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Console")
 		os.Exit(1)
+	}
+
+	if err := (&storage.VolumeReconciler{
+		Client:                    mgr.GetClient(),
+		ParentClient:              parentCluster.GetClient(),
+		ParentCache:               parentCluster.GetCache(),
+		ParentFieldIndexer:        parentCluster.GetFieldIndexer(),
+		Namespace:                 namespace,
+		StoragePoolName:           storagePoolName,
+		SourceStoragePoolSelector: sourceStoragePoolSelector,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Volume")
 	}
 	if err := (&storage.StoragePoolReconciler{
 		Client:                    mgr.GetClient(),
