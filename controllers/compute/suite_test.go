@@ -23,21 +23,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onmetal/controller-utils/kustomizeutils"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrl "sigs.k8s.io/controller-runtime"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	"github.com/onmetal/controller-utils/envtestutils"
+	"github.com/onmetal/controller-utils/kustomizeutils"
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
@@ -77,7 +77,7 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDs: onmetalCRDs.Items,
+		CRDs: envtestutils.CRDPtrsFromCRDs(onmetalCRDs.Items),
 	}
 
 	var err error

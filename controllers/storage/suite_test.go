@@ -34,6 +34,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	"github.com/onmetal/controller-utils/envtestutils"
 	"github.com/onmetal/controller-utils/kustomizeutils"
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
 	//+kubebuilder:scaffold:imports
@@ -72,7 +73,7 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDs: onmetalCRDs.Items,
+		CRDs: envtestutils.CRDPtrsFromCRDs(onmetalCRDs.Items),
 	}
 
 	var err error
