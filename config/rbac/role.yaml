@@ -84,3 +84,46 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - storage.onmetal.de
+  resources:
+  - storageclasses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - storage.onmetal.de
+  resources:
+  - storagepools
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - storage.onmetal.de
+  resources:
+  - volumes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - storage.onmetal.de
+  resources:
+  - volumes/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - storage.onmetal.de
+  resources:
+  - volumes/status
+  verbs:
+  - get
+  - patch
+  - update
