@@ -135,15 +135,6 @@ func SetupTest(ctx context.Context) *corev1.Namespace {
 			MachinePoolName:           machinePoolName,
 			SourceMachinePoolSelector: sourceMachinePoolLabels,
 		}).SetupWithManager(k8sManager)).To(Succeed())
-		Expect((&ConsoleReconciler{
-			Scheme:             k8sManager.GetScheme(),
-			Client:             k8sManager.GetClient(),
-			ParentClient:       k8sManager.GetClient(),
-			ParentFieldIndexer: k8sManager.GetFieldIndexer(),
-			ParentCache:        k8sManager.GetCache(),
-			Namespace:          ns.Name,
-			MachinePoolName:    machinePoolName,
-		}).SetupWithManager(k8sManager)).To(Succeed())
 
 		go func() {
 			Expect(k8sManager.Start(mgrCtx)).To(Succeed(), "failed to start manager")

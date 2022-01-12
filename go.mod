@@ -9,7 +9,7 @@ require (
 	github.com/google/addlicense v1.0.0
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/onmetal/controller-utils v0.2.4
-	github.com/onmetal/onmetal-api v0.0.9-0.20211117083923-0ec2023f7c3a
+	github.com/onmetal/onmetal-api v0.0.9-0.20220110140336-ddf1b9faf86c
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.17.0
 	github.com/spf13/pflag v1.0.5

@@ -17,18 +17,16 @@ package compute
 import (
 	"context"
 
-	commonv1alpha1 "github.com/onmetal/onmetal-api/apis/common/v1alpha1"
-
-	partitionletcomputev1alpha1 "github.com/onmetal/partitionlet/apis/compute/v1alpha1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	. "github.com/onsi/ginkgo"
+	commonv1alpha1 "github.com/onmetal/onmetal-api/apis/common/v1alpha1"
+	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
+	partitionletcomputev1alpha1 "github.com/onmetal/partitionlet/apis/compute/v1alpha1"
 )
 
 var _ = Describe("MachineController", func() {
@@ -102,7 +100,7 @@ var _ = Describe("MachineController", func() {
 		baseParentMachine := parentMachine.DeepCopy()
 		parentMachine.Status.Interfaces = []computev1alpha1.InterfaceStatus{{
 			Name: "myinterface",
-			IP:   commonv1alpha1.MustParseIPAddr("10.0.0.1"),
+			IP:   commonv1alpha1.MustParseIP("10.0.0.1"),
 		}}
 		Expect(k8sClient.Status().Patch(ctx, parentMachine, client.MergeFrom(baseParentMachine))).To(Succeed())
 
@@ -116,7 +114,7 @@ var _ = Describe("MachineController", func() {
 
 			g.Expect(machine.Status.Interfaces).To(Equal([]computev1alpha1.InterfaceStatus{{
 				Name: "myinterface",
-				IP:   commonv1alpha1.MustParseIPAddr("10.0.0.1"),
+				IP:   commonv1alpha1.MustParseIP("10.0.0.1"),
 			}}))
 		}, timeout, interval).Should(Succeed())
 	})
