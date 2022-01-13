@@ -27,6 +27,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -36,9 +38,8 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	"github.com/onmetal/controller-utils/cmdutils/switches"
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	"github.com/onmetal/partitionlet/controllers/compute"
 	"github.com/onmetal/partitionlet/controllers/storage"
@@ -49,6 +50,11 @@ var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 	hostName string
+
+	machineController     = "machine"
+	volumeController      = "volume"
+	machinePoolController = "machinepool"
+	storagePoolController = "storagepool"
 )
 
 func init() {
@@ -99,6 +105,12 @@ func main() {
 	flag.StringVar(&storagePoolName, "storage-pool-name", hostName, "StoragePool to announce in the parent cluster.")
 	flag.StringVar(&storagePoolProviderID, "storage-pool-provider-id", "", "Provider ID (usually <provider-type>://<id>) of the announced StoragePool.")
 	flag.StringToStringVar(&sourceStoragePoolSelector, "source-storage-pool-selector", nil, "Selector of source storage pools")
+
+	controllers := switches.New(
+		[]string{machineController, volumeController, machinePoolController, switches.Disable(storagePoolController)},
+	)
+	flag.Var(controllers, "controllers", fmt.Sprintf("Controllers to enable. All controllers: %v. Disabled-by-default controllers: %v", controllers.All(), controllers.DisabledByDefault()))
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -113,23 +125,11 @@ func main() {
 		setupLog.Error(err, "Machine pool name is not defined")
 		os.Exit(1)
 	}
-	if machinePoolProviderID == "" {
-		err := fmt.Errorf("machine pool provider id needs to be set")
-		setupLog.Error(err, "Machine pool provider id is not defined")
-		os.Exit(1)
-	}
-
 	if storagePoolName == "" {
 		err := fmt.Errorf("storage pool name needs to be set")
 		setupLog.Error(err, "Storage pool name is not defined")
 		os.Exit(1)
 	}
-	if storagePoolProviderID == "" {
-		err := fmt.Errorf("storage pool provider id needs to be set")
-		setupLog.Error(err, "Storage pool provider id is not defined")
-		os.Exit(1)
-	}
-
 	if storagePoolName == "" {
 		err := fmt.Errorf("storage pool name needs to be set")
 		setupLog.Error(err, "storage pool name is not defined")
@@ -167,55 +167,72 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&compute.MachinePoolReconciler{
-		Client:                    mgr.GetClient(),
-		ParentClient:              parentCluster.GetClient(),
-		ParentCache:               parentCluster.GetCache(),
-		MachinePoolName:           machinePoolName,
-		ProviderID:                machinePoolProviderID,
-		MachinePoolLabels:         machinePoolLabels,
-		MachinePoolAnnotations:    machinePoolAnnotations,
-		SourceMachinePoolSelector: sourceMachinePoolSelector,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "MachinePool")
-		os.Exit(1)
+	if controllers.Enabled(machinePoolController) {
+		if machinePoolProviderID == "" {
+			err := fmt.Errorf("machine pool provider id needs to be set")
+			setupLog.Error(err, "Machine pool provider id is not defined")
+			os.Exit(1)
+		}
+		if err := (&compute.MachinePoolReconciler{
+			Client:                    mgr.GetClient(),
+			ParentClient:              parentCluster.GetClient(),
+			ParentCache:               parentCluster.GetCache(),
+			MachinePoolName:           machinePoolName,
+			ProviderID:                machinePoolProviderID,
+			MachinePoolLabels:         machinePoolLabels,
+			MachinePoolAnnotations:    machinePoolAnnotations,
+			SourceMachinePoolSelector: sourceMachinePoolSelector,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MachinePool")
+			os.Exit(1)
+		}
+	}
+	if controllers.Enabled(machineController) {
+		if err = (&compute.MachineReconciler{
+			Client:                    mgr.GetClient(),
+			ParentClient:              parentCluster.GetClient(),
+			ParentCache:               parentCluster.GetCache(),
+			ParentFieldIndexer:        parentCluster.GetFieldIndexer(),
+			Namespace:                 namespace,
+			MachinePoolName:           machinePoolName,
+			SourceMachinePoolSelector: sourceMachinePoolSelector,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "Machine")
+			os.Exit(1)
+		}
+	}
+	if controllers.Enabled(volumeController) {
+		if err := (&storage.VolumeReconciler{
+			Client:                    mgr.GetClient(),
+			ParentClient:              parentCluster.GetClient(),
+			ParentCache:               parentCluster.GetCache(),
+			ParentFieldIndexer:        parentCluster.GetFieldIndexer(),
+			Namespace:                 namespace,
+			StoragePoolName:           storagePoolName,
+			SourceStoragePoolSelector: sourceStoragePoolSelector,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "Volume")
+		}
+	}
+	if controllers.Enabled(storagePoolController) {
+		if storagePoolProviderID == "" {
+			err := fmt.Errorf("storage pool provider id needs to be set")
+			setupLog.Error(err, "Storage pool provider id is not defined")
+			os.Exit(1)
+		}
+		if err := (&storage.StoragePoolReconciler{
+			Client:                    mgr.GetClient(),
+			ParentClient:              parentCluster.GetClient(),
+			ParentCache:               parentCluster.GetCache(),
+			StoragePoolName:           storagePoolName,
+			ProviderID:                storagePoolProviderID,
+			SourceStoragePoolSelector: sourceStoragePoolSelector,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "StoragePool")
+			os.Exit(1)
+		}
 	}
 
-	if err = (&compute.MachineReconciler{
-		Client:                    mgr.GetClient(),
-		ParentClient:              parentCluster.GetClient(),
-		ParentCache:               parentCluster.GetCache(),
-		ParentFieldIndexer:        parentCluster.GetFieldIndexer(),
-		Namespace:                 namespace,
-		MachinePoolName:           machinePoolName,
-		SourceMachinePoolSelector: sourceMachinePoolSelector,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Machine")
-		os.Exit(1)
-	}
-
-	if err := (&storage.VolumeReconciler{
-		Client:                    mgr.GetClient(),
-		ParentClient:              parentCluster.GetClient(),
-		ParentCache:               parentCluster.GetCache(),
-		ParentFieldIndexer:        parentCluster.GetFieldIndexer(),
-		Namespace:                 namespace,
-		StoragePoolName:           storagePoolName,
-		SourceStoragePoolSelector: sourceStoragePoolSelector,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Volume")
-	}
-	if err := (&storage.StoragePoolReconciler{
-		Client:                    mgr.GetClient(),
-		ParentClient:              parentCluster.GetClient(),
-		ParentCache:               parentCluster.GetCache(),
-		StoragePoolName:           storagePoolName,
-		ProviderID:                storagePoolProviderID,
-		SourceStoragePoolSelector: sourceStoragePoolSelector,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "StoragePool")
-		os.Exit(1)
-	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
