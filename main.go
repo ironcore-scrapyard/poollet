@@ -107,7 +107,7 @@ func main() {
 	flag.StringToStringVar(&sourceStoragePoolSelector, "source-storage-pool-selector", nil, "Selector of source storage pools")
 
 	controllers := switches.New(
-		[]string{machineController, volumeController, machinePoolController, switches.Disable(storagePoolController)},
+		machineController, volumeController, machinePoolController, switches.Disable(storagePoolController),
 	)
 	flag.Var(controllers, "controllers", fmt.Sprintf("Controllers to enable. All controllers: %v. Disabled-by-default controllers: %v", controllers.All(), controllers.DisabledByDefault()))
 
