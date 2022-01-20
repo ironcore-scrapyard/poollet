@@ -32,3 +32,7 @@ const (
 func MachineName(parentNamespace, parentName string) string {
 	return fmt.Sprintf("%s--%s", parentNamespace, parentName)
 }
+
+func IgnitionConfigName(parentNamespace, name string) string {
+	return fmt.Sprintf("%s--%s", parentNamespace, name)
+}

@@ -18,17 +18,19 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/onmetal/onmetal-api/equality"
+	"k8s.io/apimachinery/pkg/types"
+
+	commonv1alpha1 "github.com/onmetal/onmetal-api/apis/common/v1alpha1"
+
 	"sigs.k8s.io/controller-runtime/pkg/event"
+
+	"github.com/onmetal/onmetal-api/equality"
 
 	partitionlethandler "github.com/onmetal/partitionlet/handler"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 
 	"github.com/go-logr/logr"
-	"github.com/onmetal/controller-utils/conditionutils"
-	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
-	partitionletcomputev1alpha1 "github.com/onmetal/partitionlet/apis/compute/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,12 +42,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	"github.com/onmetal/controller-utils/conditionutils"
+	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
+	partitionletcomputev1alpha1 "github.com/onmetal/partitionlet/apis/compute/v1alpha1"
 )
 
 const (
-	machineFinalizer         = "partitionlet.onmetal.de/machine"
-	machineFieldOwner        = client.FieldOwner("partitionlet.onmetal.de/machine")
-	machineMachineClassField = ".spec.machineClass.name"
+	machineFinalizer                  = "partitionlet.onmetal.de/machine"
+	machineFieldOwner                 = client.FieldOwner("partitionlet.onmetal.de/machine")
+	machineMachineClassField          = ".spec.machineClass.name"
+	machineMachineIgnitionConfigField = ".spec.ignition.name"
 )
 
 type MachineReconciler struct {
@@ -64,6 +71,7 @@ type MachineReconciler struct {
 //+kubebuilder:rbac:groups=compute.onmetal.de,resources=machines/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=compute.onmetal.de,resources=machines/finalizers,verbs=update;patch
 //+kubebuilder:rbac:groups=compute.onmetal.de,resources=machineclasses,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 func (r *MachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
@@ -136,6 +144,20 @@ func (r *MachineReconciler) reconcile(ctx context.Context, log logr.Logger, pare
 			MachinePoolSelector: r.SourceMachinePoolSelector,
 		},
 	}
+	if parentMachine.Spec.Ignition != nil {
+		machine.Spec.Ignition = &commonv1alpha1.ConfigMapKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: partitionletcomputev1alpha1.IgnitionConfigName(parentMachine.Namespace, parentMachine.Spec.Ignition.Name),
+			},
+			Key: parentMachine.Spec.Ignition.Key,
+		}
+
+		// Sync ConfigMap
+		if err := r.syncIgnitionConfigMap(ctx, log, parentMachine); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to sync ignition config: %w", err)
+		}
+	}
+
 	log.V(1).Info("Applying machine spec", "Machine", machine.Name)
 	if err := r.Patch(ctx, machine, client.Apply, machineFieldOwner); err != nil {
 		base := parentMachine.DeepCopy()
@@ -211,6 +233,35 @@ func (r *MachineReconciler) delete(ctx context.Context, log logr.Logger, parentM
 	return ctrl.Result{Requeue: true}, nil
 }
 
+func (r *MachineReconciler) syncIgnitionConfigMap(ctx context.Context, log logr.Logger, parentMachine *computev1alpha1.Machine) error {
+	parentConfig := &corev1.ConfigMap{}
+	key := client.ObjectKey{Name: parentMachine.Spec.Ignition.Name, Namespace: parentMachine.Namespace}
+	if err := r.ParentClient.Get(ctx, key, parentConfig); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+
+	configMap := &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Kind:       "ConfigMap",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: r.Namespace,
+			Name:      partitionletcomputev1alpha1.IgnitionConfigName(parentConfig.Namespace, parentConfig.Name),
+		},
+		Immutable:  parentConfig.Immutable,
+		Data:       parentConfig.Data,
+		BinaryData: parentConfig.BinaryData,
+	}
+
+	log.V(1).Info("Applying ConfigMap", "ConfigMap", configMap.Name)
+	if err := r.Patch(ctx, configMap, client.Apply, machineFieldOwner); err != nil {
+		return fmt.Errorf("error applying ignition config map: %w", err)
+	}
+
+	return nil
+}
+
 func (r *MachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	log := ctrl.Log.WithName("machine-reconciler")
 	ctx := ctrl.LoggerInto(context.Background(), log)
@@ -220,6 +271,16 @@ func (r *MachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return []string{machine.Spec.MachineClass.Name}
 	}); err != nil {
 		return fmt.Errorf("error setting up %s indexer: %w", machineMachineClassField, err)
+	}
+
+	if err := r.ParentFieldIndexer.IndexField(ctx, &computev1alpha1.Machine{}, machineMachineIgnitionConfigField, func(obj client.Object) []string {
+		machine := obj.(*computev1alpha1.Machine)
+		if machine.Spec.Ignition == nil {
+			return nil
+		}
+		return []string{machine.Spec.Ignition.Name}
+	}); err != nil {
+		return fmt.Errorf("error setting up %s indexer: %w", machineMachineIgnitionConfigField, err)
 	}
 
 	c, err := controller.New("machine", mgr, controller.Options{
@@ -292,6 +353,35 @@ func (r *MachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		},
 	); err != nil {
 		return fmt.Errorf("error setting up machine watch: %w", err)
+	}
+
+	if err := c.Watch(
+		source.NewKindWithCache(&corev1.ConfigMap{}, r.ParentCache),
+		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) (reqs []reconcile.Request) {
+			list := &computev1alpha1.MachineList{}
+			if err := r.ParentClient.List(ctx, list, client.MatchingFields{machineMachineIgnitionConfigField: obj.GetName()}); err != nil {
+				log.Error(err, fmt.Sprintf("Error listing machines that use ConfigMap: %s", obj.GetName()))
+				return nil
+			}
+
+			for _, machine := range list.Items {
+				reqs = append(reqs, reconcile.Request{
+					NamespacedName: types.NamespacedName{Namespace: machine.Namespace, Name: machine.Name},
+				})
+			}
+
+			return reqs
+		}),
+		predicate.NewPredicateFuncs(func(obj client.Object) bool {
+			list := &computev1alpha1.MachineList{}
+			if err := r.ParentClient.List(ctx, list, client.MatchingFields{machineMachineIgnitionConfigField: obj.GetName()}); err != nil {
+				log.Error(err, fmt.Sprintf("Error listing machines that use ConfigMap: %s", obj.GetName()))
+				return false
+			}
+			return len(list.Items) > 0
+		}),
+	); err != nil {
+		return fmt.Errorf("error setting up parent machine ignition config map watch: %w", err)
 	}
 
 	return nil
