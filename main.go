@@ -41,6 +41,8 @@ import (
 
 	"github.com/onmetal/controller-utils/cmdutils/switches"
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
+	networkv1alpha1 "github.com/onmetal/onmetal-api/apis/network/v1alpha1"
+	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
 	"github.com/onmetal/partitionlet/controllers/compute"
 	"github.com/onmetal/partitionlet/controllers/storage"
 	//+kubebuilder:scaffold:imports
@@ -64,6 +66,8 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(computev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(networkv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(storagev1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
