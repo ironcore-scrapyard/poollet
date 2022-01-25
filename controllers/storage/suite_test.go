@@ -58,11 +58,10 @@ var sourceStoragePoolLabels = map[string]string{
 }
 
 const (
-	storagePoolName     = "my-pool"
-	storagePoolName_Vol = "my-pool-vol"
-	providerID          = "custom://pool"
-	timeout             = 2 * time.Second
-	interval            = 100 * time.Millisecond
+	storagePoolName = "my-pool"
+	providerID      = "custom://pool"
+	timeout         = 2 * time.Second
+	interval        = 100 * time.Millisecond
 )
 
 var _ = BeforeSuite(func() {
@@ -120,7 +119,7 @@ func SetupTest(ctx context.Context) *corev1.Namespace {
 			ParentClient:              k8sManager.GetClient(),
 			ParentCache:               k8sManager.GetCache(),
 			ParentFieldIndexer:        k8sManager.GetFieldIndexer(),
-			StoragePoolName:           storagePoolName_Vol,
+			StoragePoolName:           storagePoolName,
 			SourceStoragePoolSelector: sourceStoragePoolLabels,
 		}).SetupWithManager(k8sManager)).To(Succeed())
 

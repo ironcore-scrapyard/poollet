@@ -89,13 +89,15 @@ func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, paren
 		}
 		return ctrl.Result{}, nil
 	}
+
 	storageClass := &storagev1alpha1.StorageClass{}
-	storageClassKey := client.ObjectKey{Namespace: parentVolume.Namespace, Name: parentVolume.Spec.StorageClass.Name}
+	storageClassKey := client.ObjectKey{Name: parentVolume.Spec.StorageClass.Name}
 	log.V(1).Info("Getting storage class", "StorageClass", storageClassKey)
 	if err := r.Get(ctx, storageClassKey, storageClass); err != nil {
 		if !apierrors.IsNotFound(err) {
-			return ctrl.Result{}, fmt.Errorf("error getting volume class")
+			return ctrl.Result{}, fmt.Errorf("error getting storage class: %w", err)
 		}
+
 		base := parentVolume.DeepCopy()
 		conditionutils.MustUpdateSlice(&parentVolume.Status.Conditions, string(partitionletstoragev1alpha1.VolumeSynced),
 			conditionutils.UpdateStatus(corev1.ConditionFalse),
@@ -108,6 +110,7 @@ func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, paren
 		}
 		return ctrl.Result{}, nil
 	}
+
 	volume := &storagev1alpha1.Volume{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: storagev1alpha1.GroupVersion.String(),
@@ -122,7 +125,6 @@ func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, paren
 			},
 		},
 		Spec: storagev1alpha1.VolumeSpec{
-			StoragePool:         parentVolume.Spec.StoragePool,
 			StoragePoolSelector: r.SourceStoragePoolSelector,
 			StorageClass:        corev1.LocalObjectReference{Name: storageClass.Name},
 			Resources:           parentVolume.Spec.Resources,
@@ -142,6 +144,7 @@ func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, paren
 		}
 		return ctrl.Result{}, fmt.Errorf("error applying volume: %w", err)
 	}
+
 	log.V(1).Info("Updating parent volume status")
 	baseParentVolume := parentVolume.DeepCopy()
 	parentVolume.Status.State = volume.Status.State
@@ -161,12 +164,14 @@ func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, paren
 func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	log := ctrl.Log.WithName("volume-reconciler")
 	ctx := ctrl.LoggerInto(context.Background(), log)
+
 	if err := r.ParentFieldIndexer.IndexField(ctx, &storagev1alpha1.Volume{}, volumeStoragePoolField, func(obj client.Object) []string {
 		volume := obj.(*storagev1alpha1.Volume)
 		return []string{volume.Spec.StoragePool.Name}
 	}); err != nil {
 		return fmt.Errorf("error setting up %s indexer: %w", volumeStoragePoolField, err)
 	}
+
 	c, err := controller.New("volume", mgr, controller.Options{
 		Reconciler: r,
 		Log:        mgr.GetLogger().WithName("volume"),
@@ -174,6 +179,7 @@ func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return fmt.Errorf("error creating volume controller: %w", err)
 	}
+
 	if err := c.Watch(
 		source.NewKindWithCache(&storagev1alpha1.Volume{}, r.ParentCache),
 		&handler.EnqueueRequestForObject{},
@@ -184,6 +190,7 @@ func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	); err != nil {
 		return fmt.Errorf("error setting up parent volume watch: %w", err)
 	}
+
 	if err := c.Watch(
 		source.NewKindWithCache(&storagev1alpha1.StoragePool{}, r.ParentCache),
 		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
@@ -205,6 +212,7 @@ func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	); err != nil {
 		return fmt.Errorf("error setting up parent storage pool watch: %w", err)
 	}
+
 	if err := c.Watch(
 		&source.Kind{Type: &storagev1alpha1.Volume{}},
 		&partitionlethandler.EnqueueRequestForParentObject{

@@ -49,17 +49,6 @@ var _ = Describe("VolumeController", func() {
 		}
 		Expect(k8sClient.Create(ctx, storageClass)).To(Succeed())
 
-		By("creating a storage pool")
-		storagePool := &storagev1alpha1.StoragePool{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: storagePoolName_Vol,
-			},
-			Spec: storagev1alpha1.StoragePoolSpec{
-				ProviderID: "onmetal://shared",
-			},
-		}
-		Expect(k8sClient.Create(ctx, storagePool)).To(Succeed())
-
 		By("creating a volume")
 		parentVolume := &storagev1alpha1.Volume{
 			ObjectMeta: metav1.ObjectMeta{
@@ -71,7 +60,7 @@ var _ = Describe("VolumeController", func() {
 					Name: storageClass.Name,
 				},
 				StoragePool: corev1.LocalObjectReference{
-					Name: storagePool.Name,
+					Name: storagePoolName,
 				},
 				StoragePoolSelector: sourceStoragePoolLabels,
 			},
@@ -88,7 +77,6 @@ var _ = Describe("VolumeController", func() {
 			g.Expect(volume.Spec).To(Equal(storagev1alpha1.VolumeSpec{
 				StorageClass:        corev1.LocalObjectReference{Name: storageClass.Name},
 				StoragePoolSelector: sourceStoragePoolLabels,
-				StoragePool:         corev1.LocalObjectReference{Name: storagePoolName_Vol},
 			}))
 		}, timeout, interval).Should(Succeed())
 	})
