@@ -81,6 +81,7 @@ func LoadRESTConfig(kubeconfig string) (*rest.Config, error) {
 }
 
 func main() {
+	var leaderElectionID string
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
@@ -94,6 +95,7 @@ func main() {
 	var machinePoolLabels map[string]string
 	var machinePoolAnnotations map[string]string
 	var sourceStoragePoolSelector map[string]string
+	flag.StringVar(&leaderElectionID, "leader-election-id", "ba861938.onmetal.de", "Leader election id to use.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -151,7 +153,7 @@ func main() {
 		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "ba861938.onmetal.de",
+		LeaderElectionID:       leaderElectionID,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
