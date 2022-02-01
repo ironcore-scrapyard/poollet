@@ -75,7 +75,46 @@ func (r *VolumeReconciler) reconcileExists(ctx context.Context, log logr.Logger,
 	return r.reconcile(ctx, log, volume)
 }
 
-func (r *VolumeReconciler) delete(ctx context.Context, log logr.Logger, volume *storagev1alpha1.Volume) (ctrl.Result, error) {
+func (r *VolumeReconciler) delete(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume) (ctrl.Result, error) {
+	if !controllerutil.ContainsFinalizer(parentVolume, volumeFinalizer) {
+		log.V(1).Info("Volume contains no finalizer, no deletion needs to be done")
+		return ctrl.Result{}, nil
+	}
+
+	objectsToDelete := []client.Object{
+		&storagev1alpha1.Volume{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: r.Namespace,
+				Name:      partitionletstoragev1alpha1.VolumeName(parentVolume.Namespace, parentVolume.Name),
+			},
+		},
+	}
+
+	var goneCt int
+	log.V(1).Info("Deleting dependent objects")
+	for _, objectToDelete := range objectsToDelete {
+		log.V(1).Info("Deleting dependent object", "Type", fmt.Sprintf("%T", objectToDelete), "DependentKey", client.ObjectKeyFromObject(objectToDelete))
+		if err := r.Delete(ctx, objectToDelete); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return ctrl.Result{}, fmt.Errorf("error deleting %T %s: %w", objectToDelete, client.ObjectKeyFromObject(objectToDelete), err)
+			}
+			goneCt++
+		}
+	}
+
+	if goneCt != len(objectsToDelete) {
+		log.V(1).Info("Not all dependent objects are gone", "Expected", len(objectsToDelete), "Actual", goneCt)
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	log.V(1).Info("All dependent objects are gone, removing finalizer to allow deletion")
+	base := parentVolume.DeepCopy()
+	controllerutil.RemoveFinalizer(parentVolume, volumeFinalizer)
+	if err := r.ParentClient.Patch(ctx, parentVolume, client.MergeFrom(base)); err != nil {
+		return ctrl.Result{}, fmt.Errorf("error removing finalizer: %w", err)
+	}
+
+	log.V(1).Info("Successfully removed finalizer")
 	return ctrl.Result{}, nil
 }
 
