@@ -16,17 +16,11 @@ package v1alpha1
 
 import (
 	"fmt"
-
-	"github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 )
 
 const (
 	MachineParentNamespaceAnnotation = "partitionlet.onmetal.de/machine-parent-namespace"
 	MachineParentNameAnnotation      = "partitionlet.onmetal.de/machine-parent-name"
-)
-
-const (
-	MachineSynced v1alpha1.MachineConditionType = "Synced"
 )
 
 func MachineName(parentNamespace, parentName string) string {

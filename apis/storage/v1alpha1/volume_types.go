@@ -16,17 +16,11 @@ package v1alpha1
 
 import (
 	"fmt"
-
-	"github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
 )
 
 const (
 	VolumeParentNamespaceAnnotation = "partitionlet.onmetal.de/volume-parent-namespace"
 	VolumeParentNameAnnotation      = "partitionlet.onmetal.de/volume-parent-name"
-)
-
-const (
-	VolumeSynced v1alpha1.VolumeAttachmentConditionType = "Synced"
 )
 
 func VolumeName(parentNamespace, parentName string) string {

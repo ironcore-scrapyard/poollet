@@ -19,10 +19,6 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	"github.com/onmetal/controller-utils/conditionutils"
-	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
-	partitionletstoragev1alpha1 "github.com/onmetal/partitionlet/apis/storage/v1alpha1"
-	partitionlethandler "github.com/onmetal/partitionlet/handler"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,6 +31,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	"github.com/onmetal/controller-utils/conditionutils"
+	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+	partitionletstoragev1alpha1 "github.com/onmetal/partitionlet/apis/storage/v1alpha1"
+	partitionlethandler "github.com/onmetal/partitionlet/handler"
 )
 
 const (
@@ -138,7 +139,7 @@ func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, paren
 		}
 
 		base := parentVolume.DeepCopy()
-		conditionutils.MustUpdateSlice(&parentVolume.Status.Conditions, string(partitionletstoragev1alpha1.VolumeSynced),
+		conditionutils.MustUpdateSlice(&parentVolume.Status.Conditions, string(storagev1alpha1.VolumeSynced),
 			conditionutils.UpdateStatus(corev1.ConditionFalse),
 			conditionutils.UpdateReason("StorageClassNotFound"),
 			conditionutils.UpdateMessage("The referenced storage class does not exist in this partition."),
@@ -172,7 +173,7 @@ func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, paren
 	log.V(1).Info("Applying volume", "Volume", volume.Name)
 	if err := r.Patch(ctx, volume, client.Apply, volumeFieldOwner); err != nil {
 		base := parentVolume.DeepCopy()
-		conditionutils.MustUpdateSlice(&parentVolume.Status.Conditions, string(partitionletstoragev1alpha1.VolumeSynced),
+		conditionutils.MustUpdateSlice(&parentVolume.Status.Conditions, string(storagev1alpha1.VolumeSynced),
 			conditionutils.UpdateStatus(corev1.ConditionFalse),
 			conditionutils.UpdateReason("ApplyFailed"),
 			conditionutils.UpdateMessage(fmt.Sprintf("Could not apply the volume: %v", err)),
@@ -187,7 +188,7 @@ func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, paren
 	log.V(1).Info("Updating parent volume status")
 	baseParentVolume := parentVolume.DeepCopy()
 	parentVolume.Status.State = volume.Status.State
-	conditionutils.MustUpdateSlice(&parentVolume.Status.Conditions, string(partitionletstoragev1alpha1.VolumeSynced),
+	conditionutils.MustUpdateSlice(&parentVolume.Status.Conditions, string(storagev1alpha1.VolumeSynced),
 		conditionutils.UpdateStatus(corev1.ConditionTrue),
 		conditionutils.UpdateReason("Applied"),
 		conditionutils.UpdateMessage("Successfully applied volume"),

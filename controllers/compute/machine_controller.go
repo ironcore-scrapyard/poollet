@@ -18,34 +18,28 @@ import (
 	"context"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/types"
-
-	commonv1alpha1 "github.com/onmetal/onmetal-api/apis/common/v1alpha1"
-
-	"sigs.k8s.io/controller-runtime/pkg/event"
-
-	"github.com/onmetal/onmetal-api/equality"
-
-	partitionlethandler "github.com/onmetal/partitionlet/handler"
-
-	"sigs.k8s.io/controller-runtime/pkg/cache"
-
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/onmetal/controller-utils/conditionutils"
+	commonv1alpha1 "github.com/onmetal/onmetal-api/apis/common/v1alpha1"
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
+	"github.com/onmetal/onmetal-api/equality"
 	partitionletcomputev1alpha1 "github.com/onmetal/partitionlet/apis/compute/v1alpha1"
+	partitionlethandler "github.com/onmetal/partitionlet/handler"
 )
 
 const (
@@ -111,7 +105,7 @@ func (r *MachineReconciler) reconcile(ctx context.Context, log logr.Logger, pare
 		}
 
 		base := parentMachine.DeepCopy()
-		conditionutils.MustUpdateSlice(&parentMachine.Status.Conditions, string(partitionletcomputev1alpha1.MachineSynced),
+		conditionutils.MustUpdateSlice(&parentMachine.Status.Conditions, string(computev1alpha1.MachineSynced),
 			conditionutils.UpdateStatus(corev1.ConditionFalse),
 			conditionutils.UpdateReason("MachineClassNotFound"),
 			conditionutils.UpdateMessage("The referenced machine class does not exist in this partition."),
@@ -161,7 +155,7 @@ func (r *MachineReconciler) reconcile(ctx context.Context, log logr.Logger, pare
 	log.V(1).Info("Applying machine spec", "Machine", machine.Name)
 	if err := r.Patch(ctx, machine, client.Apply, machineFieldOwner); err != nil {
 		base := parentMachine.DeepCopy()
-		conditionutils.MustUpdateSlice(&parentMachine.Status.Conditions, string(partitionletcomputev1alpha1.MachineSynced),
+		conditionutils.MustUpdateSlice(&parentMachine.Status.Conditions, string(computev1alpha1.MachineSynced),
 			conditionutils.UpdateStatus(corev1.ConditionFalse),
 			conditionutils.UpdateReason("ApplyFailed"),
 			conditionutils.UpdateMessage(fmt.Sprintf("Could not apply the machine: %v", err)),
@@ -175,11 +169,11 @@ func (r *MachineReconciler) reconcile(ctx context.Context, log logr.Logger, pare
 
 	log.V(1).Info("Applying machine status", "Machine", machine.Name)
 	baseMachine := machine.DeepCopy()
-	machine.Status.VolumeClaims = parentMachine.Status.VolumeClaims
+	machine.Status.VolumeAttachments = parentMachine.Status.VolumeAttachments
 	machine.Status.Interfaces = parentMachine.Status.Interfaces
 	if err := r.Status().Patch(ctx, machine, client.MergeFrom(baseMachine)); err != nil {
 		base := parentMachine.DeepCopy()
-		conditionutils.MustUpdateSlice(&parentMachine.Status.Conditions, string(partitionletcomputev1alpha1.MachineSynced),
+		conditionutils.MustUpdateSlice(&parentMachine.Status.Conditions, string(computev1alpha1.MachineSynced),
 			conditionutils.UpdateStatus(corev1.ConditionFalse),
 			conditionutils.UpdateReason("ApplyStatusFailed"),
 			conditionutils.UpdateMessage(fmt.Sprintf("Could not apply the machine status: %v", err)),
@@ -194,7 +188,7 @@ func (r *MachineReconciler) reconcile(ctx context.Context, log logr.Logger, pare
 	log.V(1).Info("Updating parent machine status")
 	baseParentMachine := parentMachine.DeepCopy()
 	parentMachine.Status.State = machine.Status.State
-	conditionutils.MustUpdateSlice(&parentMachine.Status.Conditions, string(partitionletcomputev1alpha1.MachineSynced),
+	conditionutils.MustUpdateSlice(&parentMachine.Status.Conditions, string(computev1alpha1.MachineSynced),
 		conditionutils.UpdateStatus(corev1.ConditionTrue),
 		conditionutils.UpdateReason("Applied"),
 		conditionutils.UpdateMessage("Successfully applied machine"),
