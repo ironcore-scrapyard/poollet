@@ -131,7 +131,7 @@ func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, paren
 	}
 
 	storageClass := &storagev1alpha1.StorageClass{}
-	storageClassKey := client.ObjectKey{Name: parentVolume.Spec.StorageClass.Name}
+	storageClassKey := client.ObjectKey{Name: parentVolume.Spec.StorageClassRef.Name}
 	log.V(1).Info("Getting storage class", "StorageClass", storageClassKey)
 	if err := r.Get(ctx, storageClassKey, storageClass); err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -166,7 +166,7 @@ func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, paren
 		},
 		Spec: storagev1alpha1.VolumeSpec{
 			StoragePoolSelector: r.SourceStoragePoolSelector,
-			StorageClass:        corev1.LocalObjectReference{Name: storageClass.Name},
+			StorageClassRef:     corev1.LocalObjectReference{Name: storageClass.Name},
 			Resources:           parentVolume.Spec.Resources,
 		},
 	}

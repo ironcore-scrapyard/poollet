@@ -58,7 +58,7 @@ var _ = Describe("VolumeController", func() {
 				GenerateName: "volume-",
 			},
 			Spec: storagev1alpha1.VolumeSpec{
-				StorageClass: corev1.LocalObjectReference{
+				StorageClassRef: corev1.LocalObjectReference{
 					Name: storageClass.Name,
 				},
 				StoragePool: corev1.LocalObjectReference{
@@ -77,7 +77,7 @@ var _ = Describe("VolumeController", func() {
 			g.Expect(err).NotTo(HaveOccurred())
 
 			g.Expect(volume.Spec).To(Equal(storagev1alpha1.VolumeSpec{
-				StorageClass:        corev1.LocalObjectReference{Name: storageClass.Name},
+				StorageClassRef:     corev1.LocalObjectReference{Name: storageClass.Name},
 				StoragePoolSelector: sourceStoragePoolLabels,
 			}))
 		}, timeout, interval).Should(Succeed())
@@ -106,7 +106,7 @@ var _ = Describe("VolumeController", func() {
 				GenerateName: "volume-",
 			},
 			Spec: storagev1alpha1.VolumeSpec{
-				StorageClass: corev1.LocalObjectReference{
+				StorageClassRef: corev1.LocalObjectReference{
 					Name: storageClass.Name,
 				},
 				StoragePool: corev1.LocalObjectReference{
@@ -126,7 +126,7 @@ var _ = Describe("VolumeController", func() {
 			g.Expect(err).NotTo(HaveOccurred())
 
 			g.Expect(volume.Spec).To(Equal(storagev1alpha1.VolumeSpec{
-				StorageClass:        corev1.LocalObjectReference{Name: storageClass.Name},
+				StorageClassRef:     corev1.LocalObjectReference{Name: storageClass.Name},
 				StoragePoolSelector: sourceStoragePoolLabels,
 			}))
 		}, timeout, interval).Should(Succeed())
@@ -171,7 +171,7 @@ var _ = Describe("VolumeController", func() {
 				GenerateName: "volume-",
 			},
 			Spec: storagev1alpha1.VolumeSpec{
-				StorageClass: corev1.LocalObjectReference{
+				StorageClassRef: corev1.LocalObjectReference{
 					Name: storageClass.Name,
 				},
 				StoragePool: corev1.LocalObjectReference{
@@ -191,7 +191,7 @@ var _ = Describe("VolumeController", func() {
 			g.Expect(err).NotTo(HaveOccurred())
 
 			g.Expect(volume.Spec).To(Equal(storagev1alpha1.VolumeSpec{
-				StorageClass:        corev1.LocalObjectReference{Name: storageClass.Name},
+				StorageClassRef:     corev1.LocalObjectReference{Name: storageClass.Name},
 				StoragePoolSelector: sourceStoragePoolLabels,
 			}))
 		}, timeout, interval).Should(Succeed())
