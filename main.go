@@ -95,6 +95,8 @@ func main() {
 	var machinePoolLabels map[string]string
 	var machinePoolAnnotations map[string]string
 	var sourceStoragePoolSelector map[string]string
+	var storagePoolLabels map[string]string
+	var storagePoolAnnotations map[string]string
 	flag.StringVar(&leaderElectionID, "leader-election-id", "ba861938.onmetal.de", "Leader election id to use.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -111,6 +113,8 @@ func main() {
 	flag.StringVar(&storagePoolName, "storage-pool-name", hostName, "StoragePool to announce in the parent cluster.")
 	flag.StringVar(&storagePoolProviderID, "storage-pool-provider-id", "", "Provider ID (usually <provider-type>://<id>) of the announced StoragePool.")
 	flag.StringToStringVar(&sourceStoragePoolSelector, "source-storage-pool-selector", nil, "Selector of source storage pools")
+	flag.StringToStringVar(&storagePoolLabels, "storage-pool-labels", nil, "Labels to apply to the storage pool upon startup.")
+	flag.StringToStringVar(&storagePoolAnnotations, "storage-pool-annotations", nil, "Annotations to apply to the storage pool upon startup.")
 
 	controllers := switches.New(
 		machineController, machinePoolController, switches.Disable(storagePoolController), switches.Disable(volumeController),
@@ -232,6 +236,8 @@ func main() {
 			ParentCache:               parentCluster.GetCache(),
 			StoragePoolName:           storagePoolName,
 			ProviderID:                storagePoolProviderID,
+			StoragePoolLabels:         storagePoolLabels,
+			StoragePoolAnnotations:    storagePoolAnnotations,
 			SourceStoragePoolSelector: sourceStoragePoolSelector,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "StoragePool")

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
@@ -120,6 +121,7 @@ func (r *MachinePoolReconciler) birthCry(ctx context.Context) error {
 			ProviderID: r.ProviderID,
 		},
 	}
+	log.Log.Info("Announcing MachinePool to parent cluster", "MachinePool", r.MachinePoolName, "ProviderID", r.ProviderID)
 	if err := r.ParentClient.Patch(ctx, machinePool, client.Apply, machinePoolFieldOwner); err != nil {
 		return fmt.Errorf("error appylying machinepool in parent cluster: %w", err)
 	}

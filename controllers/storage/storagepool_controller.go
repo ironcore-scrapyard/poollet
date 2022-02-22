@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -44,6 +45,8 @@ type StoragePoolReconciler struct { //nolint
 	StoragePoolName           string
 	ProviderID                string
 	SourceStoragePoolSelector map[string]string
+	StoragePoolLabels         map[string]string
+	StoragePoolAnnotations    map[string]string
 }
 
 func (r *StoragePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -104,12 +107,15 @@ func (r *StoragePoolReconciler) birthCry(ctx context.Context) error {
 			Kind:       "StoragePool",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: r.StoragePoolName,
+			Name:        r.StoragePoolName,
+			Labels:      r.StoragePoolLabels,
+			Annotations: r.StoragePoolAnnotations,
 		},
 		Spec: storagev1alpha1.StoragePoolSpec{
 			ProviderID: r.ProviderID,
 		},
 	}
+	log.Log.Info("Announcing StoragePool to parent cluster", "StoragePool", r.StoragePoolName, "ProviderID", r.ProviderID)
 	if err := r.ParentClient.Patch(ctx, storagePool, client.Apply, storagePoolFieldOwner); err != nil {
 		return fmt.Errorf("error appylying storagepool in parent cluster: %w", err)
 	}
