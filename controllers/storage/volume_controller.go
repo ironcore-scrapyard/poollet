@@ -20,10 +20,13 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/onmetal/controller-utils/clientutils"
+	"github.com/onmetal/controller-utils/metautils"
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
+	"github.com/onmetal/onmetal-api/equality"
 	"github.com/onmetal/partitionlet/controllers/shared"
 	partitionletmeta "github.com/onmetal/partitionlet/meta"
 	"github.com/onmetal/partitionlet/names"
+	partitionletpredicate "github.com/onmetal/partitionlet/predicate"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,12 +47,15 @@ import (
 )
 
 const (
-	volumeFinalizer = "partitionlet.onmetal.de/volume"
+	volumeFinalizer           = "partitionlet.onmetal.de/volume"
+	volumePurposeLabel        = "partitionlet.onmetal.de/volume-purpose"
+	volumePurposeAccessSecret = "access-secret"
 )
 
 type VolumeReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	FieldIndexer client.FieldIndexer
+	Scheme       *runtime.Scheme
 
 	ParentClient             client.Client
 	ParentCache              cache.Cache
@@ -196,25 +202,27 @@ func (r *VolumeReconciler) delete(ctx context.Context, log logr.Logger, parent *
 
 func (r *VolumeReconciler) patchParentStatus(
 	ctx context.Context,
-	parent *storagev1alpha1.Volume,
+	parentVolume *storagev1alpha1.Volume,
+	parentAccess *storagev1alpha1.VolumeAccess,
 	state storagev1alpha1.VolumeState,
 	phase storagev1alpha1.VolumePhase,
 	syncStatus corev1.ConditionStatus,
 	syncReason, syncMessage string,
 ) error {
-	if r.StoragePoolName == "" || parent.Spec.StoragePool.Name != r.StoragePoolName {
+	if r.StoragePoolName == "" || parentVolume.Spec.StoragePool.Name != r.StoragePoolName {
 		return nil
 	}
-	baseParent := parent.DeepCopy()
-	parent.Status.State = state
-	parent.Status.Phase = phase
-	conditionutils.MustUpdateSlice(&parent.Status.Conditions, string(storagev1alpha1.VolumeSynced),
+	baseParent := parentVolume.DeepCopy()
+	parentVolume.Status.Access = parentAccess
+	parentVolume.Status.State = state
+	parentVolume.Status.Phase = phase
+	conditionutils.MustUpdateSlice(&parentVolume.Status.Conditions, string(storagev1alpha1.VolumeSynced),
 		conditionutils.UpdateStatus(syncStatus),
 		conditionutils.UpdateReason(syncReason),
 		conditionutils.UpdateMessage(syncMessage),
-		conditionutils.UpdateObserved(parent),
+		conditionutils.UpdateObserved(parentVolume),
 	)
-	if err := r.ParentClient.Status().Patch(ctx, parent, client.MergeFrom(baseParent)); err != nil {
+	if err := r.ParentClient.Status().Patch(ctx, parentVolume, client.MergeFrom(baseParent)); err != nil {
 		return fmt.Errorf("error patching parent status: %w", err)
 	}
 	return nil
@@ -232,35 +240,50 @@ func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, paren
 		return r.patchParentStatusStorageClassIssue(ctx, log, parentVolume, err)
 	}
 
-	child, err := r.applyVolume(ctx, log, parentVolume, volumeKey)
+	volume, err := r.applyVolume(ctx, log, parentVolume, volumeKey)
 	if err != nil {
 		return r.patchParentStatusApplyIssue(ctx, log, parentVolume, err)
 	}
 
-	return r.patchParentStatusSuccessfulSync(ctx, log, parentVolume, child)
+	parentAccess, err := r.applyParentAccessSecret(ctx, log, parentVolume, volume, volumeKey)
+	if err != nil {
+		return r.patchParentStatusAccessSecretApplyIssue(ctx, log, parentVolume, err)
+	}
+
+	return r.patchParentStatusSuccessfulSync(ctx, log, parentVolume, volume, parentAccess)
 }
 
-func (r *VolumeReconciler) patchParentStatusSuccessfulSync(ctx context.Context, log logr.Logger, parent *storagev1alpha1.Volume, child *storagev1alpha1.Volume) (ctrl.Result, error) {
-	if err := r.patchParentStatus(ctx, parent, child.Status.State, child.Status.Phase, corev1.ConditionTrue, "Synced", "Successfully synced volume."); err != nil {
+func (r *VolumeReconciler) patchParentStatusSuccessfulSync(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume, volume *storagev1alpha1.Volume, parentAccess *storagev1alpha1.VolumeAccess) (ctrl.Result, error) {
+	if err := r.patchParentStatus(
+		ctx,
+		parentVolume,
+		parentAccess,
+		volume.Status.State,
+		volume.Status.Phase,
+		corev1.ConditionTrue,
+		"Synced",
+		"Successfully synced volume.",
+	); err != nil {
 		log.Error(err, "Error patching parent status")
 		return ctrl.Result{}, fmt.Errorf("error patching parent status")
 	}
 	return ctrl.Result{}, nil
 }
 
-func (r *VolumeReconciler) patchParentStatusApplyIssue(ctx context.Context, log logr.Logger, parent *storagev1alpha1.Volume, err error) (ctrl.Result, error) {
+func (r *VolumeReconciler) patchParentStatusApplyIssue(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume, err error) (ctrl.Result, error) {
 	if err := r.patchParentStatus(
 		ctx,
-		parent,
+		parentVolume,
+		parentVolume.Status.Access,
 		storagev1alpha1.VolumeStateError,
 		storagev1alpha1.VolumePending,
 		corev1.ConditionFalse,
 		"ApplyFailed",
-		fmt.Sprintf("Applying the child volume resulted in an error: %v", err),
+		fmt.Sprintf("Applying the volume resulted in an error: %v", err),
 	); err != nil {
 		log.Error(err, "Error patching parent status")
 	}
-	return ctrl.Result{}, fmt.Errorf("error applying child: %w", err)
+	return ctrl.Result{}, fmt.Errorf("error applying volume: %w", err)
 }
 
 func (r *VolumeReconciler) applyVolume(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume, volumeKey client.ObjectKey) (*storagev1alpha1.Volume, error) {
@@ -297,11 +320,12 @@ func (r *VolumeReconciler) applyVolume(ctx context.Context, log logr.Logger, par
 	return volume, nil
 }
 
-func (r *VolumeReconciler) patchParentStatusStorageClassIssue(ctx context.Context, log logr.Logger, parent *storagev1alpha1.Volume, err error) (ctrl.Result, error) {
+func (r *VolumeReconciler) patchParentStatusStorageClassIssue(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume, err error) (ctrl.Result, error) {
 	if err != nil {
 		if err := r.patchParentStatus(
 			ctx,
-			parent,
+			parentVolume,
+			parentVolume.Status.Access,
 			storagev1alpha1.VolumeStateError,
 			storagev1alpha1.VolumePending,
 			corev1.ConditionFalse,
@@ -314,34 +338,125 @@ func (r *VolumeReconciler) patchParentStatusStorageClassIssue(ctx context.Contex
 	}
 	if err := r.patchParentStatus(
 		ctx,
-		parent,
+		parentVolume,
+		parentVolume.Status.Access,
 		storagev1alpha1.VolumeStateError,
 		storagev1alpha1.VolumePending,
 		corev1.ConditionFalse,
 		"UnsupportedStorageClass",
-		fmt.Sprintf("Storage class %q is not supported", parent.Spec.StorageClassRef.Name),
+		fmt.Sprintf("Storage class %q is not supported", parentVolume.Spec.StorageClassRef.Name),
 	); err != nil {
 		return ctrl.Result{}, fmt.Errorf("error patching parent status: %w", err)
 	}
 	return ctrl.Result{}, nil
 }
 
-func (r *VolumeReconciler) getStorageClass(ctx context.Context, log logr.Logger, parent *storagev1alpha1.Volume) (bool, error) {
+func (r *VolumeReconciler) getStorageClass(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume) (bool, error) {
 	storageClass := &storagev1alpha1.StorageClass{}
-	storageClassKey := client.ObjectKey{Name: parent.Spec.StorageClassRef.Name}
-	log.V(1).Info("Getting storage class", "StorageClass", storageClassKey)
+	storageClassKey := client.ObjectKey{Name: parentVolume.Spec.StorageClassRef.Name}
+	log = log.WithValues("StorageClass", storageClassKey)
+	log.V(1).Info("Getting storage class")
 	if err := r.Get(ctx, storageClassKey, storageClass); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return false, fmt.Errorf("error getting storage class %s: %w", storageClassKey, err)
 		}
 		return false, nil
 	}
+	log.V(1).Info("Successfully got storage class")
 	return true, nil
 }
 
+func (r *VolumeReconciler) applyParentAccessSecret(ctx context.Context, log logr.Logger, parentVolume, volume *storagev1alpha1.Volume, volumeKey client.ObjectKey) (*storagev1alpha1.VolumeAccess, error) {
+	volumeAccess := volume.Status.Access
+	if volumeAccess == nil {
+		log.V(1).Info("Volume does not provide any access yet.")
+		return nil, nil
+	}
+	log.V(1).Info("Volume has access information")
+
+	accessSecretKey := client.ObjectKey{Namespace: volumeKey.Namespace, Name: volumeAccess.SecretRef.Name}
+	accessSecret := &corev1.Secret{}
+	log.V(1).Info("Getting access secret", "AccessSecretKey", accessSecretKey)
+	if err := r.Get(ctx, accessSecretKey, accessSecret); err != nil {
+		return nil, fmt.Errorf("error getting access secret %s: %w", accessSecretKey, err)
+	}
+
+	log.V(1).Info("Listing managed secrets in parent cluster.")
+	secretList := &corev1.SecretList{}
+	err := clientutils.ListAndFilterControlledBy(ctx, r.ParentClient, parentVolume, secretList,
+		client.InNamespace(parentVolume.Namespace),
+		client.MatchingLabels{
+			volumePurposeLabel: volumePurposeAccessSecret,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error listing parent volume access secrets: %w", err)
+	}
+
+	secretObjects, err := metautils.ExtractObjectSlice(secretList.Items)
+	if err != nil {
+		return nil, err
+	}
+
+	log.V(1).Info("Applying access secret in parent cluster")
+	parentAccessSecret := &corev1.Secret{}
+	_, deprecatedAccessSecrets, err := clientutils.CreateOrUseAndPatch(ctx, r.ParentClient, secretObjects, parentAccessSecret,
+		func() (bool, error) {
+			return equality.Semantic.DeepEqual(accessSecret.Data, parentAccessSecret.Data), nil
+		},
+		clientutils.IsOlderThan(parentAccessSecret),
+		func() error {
+			if parentAccessSecret.ResourceVersion != "" {
+				return nil
+			}
+			parentAccessSecret.ObjectMeta = metav1.ObjectMeta{
+				Namespace:    parentVolume.Namespace,
+				GenerateName: fmt.Sprintf("%s-access-", parentVolume.Name),
+				Labels: map[string]string{
+					volumePurposeLabel: volumePurposeAccessSecret,
+				},
+			}
+			parentAccessSecret.Data = accessSecret.Data
+			return controllerutil.SetControllerReference(parentVolume, parentAccessSecret, r.Scheme)
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error applying access secret: %w", err)
+	}
+	for _, deprecatedAccessSecret := range deprecatedAccessSecrets {
+		if err := r.ParentClient.Delete(ctx, deprecatedAccessSecret); client.IgnoreNotFound(err) != nil {
+			log.Error(err, "Error deleting deprecated parent access secret",
+				"DeprecatedAccessSecretKey", client.ObjectKeyFromObject(deprecatedAccessSecret),
+			)
+		}
+	}
+	return &storagev1alpha1.VolumeAccess{
+		SecretRef:        corev1.LocalObjectReference{Name: parentAccessSecret.Name},
+		Driver:           volumeAccess.Driver,
+		VolumeAttributes: volumeAccess.VolumeAttributes,
+	}, nil
+}
+
+func (r *VolumeReconciler) patchParentStatusAccessSecretApplyIssue(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume, err error) (ctrl.Result, error) {
+	if err := r.patchParentStatus(
+		ctx,
+		parentVolume,
+		parentVolume.Status.Access,
+		storagev1alpha1.VolumeStateError,
+		storagev1alpha1.VolumePending,
+		corev1.ConditionFalse,
+		"ErrorApplyingAccessSecret",
+		fmt.Sprintf("Error applying access secret: %v", err),
+	); err != nil {
+		log.Error(err, "Error patching parent status")
+	}
+	return ctrl.Result{}, err
+}
+
 const (
-	volumeSpecStoragePoolNameField = ".spec.storagePool.name"
-	volumeSpecClaimRefNameField    = ".spec.claimRef.name"
+	volumeSpecStoragePoolNameField  = ".spec.storagePool.name"
+	volumeSpecClaimRefNameField     = ".spec.claimRef.name"
+	volumeStatusAccessSecretRefName = ".status.access.secretRef.name"
 )
 
 func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -370,6 +485,18 @@ func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}
 	}
 
+	if err := r.FieldIndexer.IndexField(ctx, &storagev1alpha1.Volume{}, volumeStatusAccessSecretRefName, func(obj client.Object) []string {
+		volume := obj.(*storagev1alpha1.Volume)
+		access := volume.Status.Access
+		if access == nil || access.SecretRef.Name == "" {
+			return nil
+		}
+
+		return []string{access.SecretRef.Name}
+	}); err != nil {
+		return err
+	}
+
 	c, err := controller.New("volume", mgr, controller.Options{
 		Reconciler: r,
 		Log:        mgr.GetLogger().WithName("volume"),
@@ -381,10 +508,11 @@ func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := c.Watch(
 		source.NewKindWithCache(&storagev1alpha1.Volume{}, r.ParentCache),
 		&handler.EnqueueRequestForObject{},
+		&partitionletpredicate.VolatileConditionFieldsPredicate{},
 		predicate.NewPredicateFuncs(func(obj client.Object) bool {
-			parent := obj.(*storagev1alpha1.Volume)
+			parentVolume := obj.(*storagev1alpha1.Volume)
 
-			key, err := r.NamesStrategy.Key(ctx, client.ObjectKeyFromObject(parent), parent)
+			key, err := r.NamesStrategy.Key(ctx, client.ObjectKeyFromObject(parentVolume), parentVolume)
 			if err != nil {
 				log.Error(err, "Error constructing target key")
 				return false
@@ -400,7 +528,7 @@ func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return true
 			}
 
-			used, err := r.isParentUsed(ctx, log, parent)
+			used, err := r.isParentUsed(ctx, log, parentVolume)
 			if err != nil {
 				log.Error(err, "Error determining whether parent is used")
 				return false
@@ -411,6 +539,14 @@ func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}),
 	); err != nil {
 		return fmt.Errorf("error setting up parent volume watch: %w", err)
+	}
+
+	if err := c.Watch(
+		source.NewKindWithCache(&corev1.Secret{}, r.ParentCache),
+		&handler.EnqueueRequestForOwner{OwnerType: &storagev1alpha1.Volume{}},
+		&predicate.GenerationChangedPredicate{},
+	); err != nil {
+		return err
 	}
 
 	if r.StoragePoolName != "" {
@@ -472,6 +608,7 @@ func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				}
 				return res
 			}),
+			&partitionletpredicate.VolatileConditionFieldsPredicate{},
 		); err != nil {
 			return fmt.Errorf("error setting up parent machine watch: %w", err)
 		}
@@ -482,8 +619,37 @@ func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		&partitionlethandler.EnqueueRequestForParentController{
 			OwnerType: &storagev1alpha1.Volume{},
 		},
+		&partitionletpredicate.VolatileConditionFieldsPredicate{},
 	); err != nil {
 		return fmt.Errorf("error setting up volume watch: %w", err)
 	}
+
+	if err := c.Watch(
+		&source.Kind{Type: &corev1.Secret{}},
+		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+			secret := obj.(*corev1.Secret)
+			log := log.WithValues("SecretKey", client.ObjectKeyFromObject(secret))
+			volumeList := &storagev1alpha1.VolumeList{}
+			if err := r.List(ctx, volumeList,
+				client.InNamespace(secret.Namespace),
+				client.MatchingFields{
+					volumeStatusAccessSecretRefName: secret.Name,
+				},
+			); err != nil {
+				log.Error(err, "Error listing volumes using secret")
+				return nil
+			}
+
+			reqs := make([]reconcile.Request, 0, len(volumeList.Items))
+			for _, volume := range volumeList.Items {
+				reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&volume)})
+			}
+			return reqs
+		}),
+		&predicate.GenerationChangedPredicate{},
+	); err != nil {
+		return err
+	}
+
 	return nil
 }

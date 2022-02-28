@@ -129,6 +129,7 @@ func SetupTest(ctx context.Context) *corev1.Namespace {
 
 		Expect((&VolumeReconciler{
 			Client:                    k8sManager.GetClient(),
+			FieldIndexer:              k8sManager.GetFieldIndexer(),
 			Scheme:                    k8sManager.GetScheme(),
 			ParentClient:              k8sManager.GetClient(),
 			ParentCache:               k8sManager.GetCache(),

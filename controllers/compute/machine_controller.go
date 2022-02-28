@@ -28,6 +28,7 @@ import (
 	partitionlethandler "github.com/onmetal/partitionlet/handler"
 	partitionletmeta "github.com/onmetal/partitionlet/meta"
 	"github.com/onmetal/partitionlet/names"
+	partitionletpredicate "github.com/onmetal/partitionlet/predicate"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -367,6 +368,7 @@ func (r *MachineReconciler) createOrUseAndPatchVolumeClaim(
 		func() (bool, error) {
 			return equality.Semantic.DeepEqual(volumeClaim.Spec, desiredVolumeClaimSpec), nil
 		},
+		clientutils.IsOlderThan(volumeClaim),
 		nil,
 	)
 	if err != nil {
@@ -526,16 +528,7 @@ func (r *MachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			machine := obj.(*computev1alpha1.Machine)
 			return machine.Spec.MachinePool.Name == r.MachinePoolName
 		}),
-		predicate.Funcs{
-			UpdateFunc: func(event event.UpdateEvent) bool {
-				oldMachine, newMachine := event.ObjectOld.(*computev1alpha1.Machine).DeepCopy(), event.ObjectNew.(*computev1alpha1.Machine).DeepCopy()
-				oldMachine.ResourceVersion = ""
-				newMachine.ResourceVersion = ""
-				oldMachine.Status.Conditions = nil
-				newMachine.Status.Conditions = nil
-				return !equality.Semantic.DeepEqual(oldMachine, newMachine)
-			},
-		},
+		&partitionletpredicate.VolatileConditionFieldsPredicate{},
 	); err != nil {
 		return err
 	}

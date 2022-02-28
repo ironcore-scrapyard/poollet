@@ -238,6 +238,7 @@ func main() {
 	if controllers.Enabled(volumeController) {
 		if err := (&storage.VolumeReconciler{
 			Client:                    mgr.GetClient(),
+			FieldIndexer:              mgr.GetFieldIndexer(),
 			Scheme:                    mgr.GetScheme(),
 			ParentClient:              parentCluster.GetClient(),
 			ParentCache:               parentCluster.GetCache(),

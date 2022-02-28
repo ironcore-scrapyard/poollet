@@ -2,4 +2,4 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - git@github.com/onmetal/onmetal-api//config/crd?ref=050ab0a8cd565a042521f47001bd6941784bb7ea
+  - git@github.com/onmetal/onmetal-api//config/crd?ref=019bd2a8ccb62d7ad5bbc93b2c079c7319b04aaa

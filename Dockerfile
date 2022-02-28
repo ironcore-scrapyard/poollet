@@ -27,6 +27,7 @@ COPY controllers/ controllers/
 COPY handler/ handler/
 COPY meta/ meta/
 COPY names/ names/
+COPY predicate/ predicate/
 
 # Build
 RUN GOMAXPROCS=1 CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH:-$(go env GOARCH)} go build -a -o manager main.go
