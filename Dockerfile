@@ -22,9 +22,11 @@ RUN --mount=type=ssh --mount=type=secret,id=github_pat GITHUB_PAT_PATH=/run/secr
 
 # Copy the go source
 COPY main.go main.go
-COPY apis/ apis/
+COPY client/ client/
 COPY controllers/ controllers/
 COPY handler/ handler/
+COPY meta/ meta/
+COPY names/ names/
 
 # Build
 RUN GOMAXPROCS=1 CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH:-$(go env GOARCH)} go build -a -o manager main.go

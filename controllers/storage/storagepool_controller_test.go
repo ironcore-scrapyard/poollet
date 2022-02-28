@@ -15,18 +15,19 @@
 package storage
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
 )
 
 var _ = Describe("StoragePoolController", func() {
-	ctx := controllerruntime.SetupSignalHandler()
+	ctx := context.Background()
 	_ = SetupTest(ctx)
 
 	It("should sync its storage pool from the source storage pools", func() {
@@ -65,10 +66,10 @@ var _ = Describe("StoragePoolController", func() {
 		By("waiting for the accumulating storage pool to report both classes")
 		Eventually(func(g Gomega) {
 			pool := &storagev1alpha1.StoragePool{}
-			Expect(k8sClient.Get(ctx, client.ObjectKey{Name: "my-pool"}, pool)).To(Succeed())
+			Expect(k8sClient.Get(ctx, client.ObjectKey{Name: storagePoolName}, pool)).To(Succeed())
 
 			By("inspecting the pool")
-			Expect(pool.Spec.ProviderID).To(Equal("custom://pool"))
+			Expect(pool.Spec.ProviderID).To(Equal(storagePoolProviderID))
 			g.Expect(pool.Status.AvailableStorageClasses).To(ConsistOf(
 				corev1.LocalObjectReference{Name: "foo"},
 				corev1.LocalObjectReference{Name: "bar"},

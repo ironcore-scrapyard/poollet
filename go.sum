@@ -383,10 +383,11 @@ github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=
 github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
-github.com/onmetal/controller-utils v0.3.2 h1:XbVKupT74f1EBcfYd3JRD7K+31VN+QgCrMkB/77jI/8=
 github.com/onmetal/controller-utils v0.3.2/go.mod h1:zCNJfEgn//oE02LUC4KTHsibltp7D7M0H1MAWXj/8k4=
-github.com/onmetal/onmetal-api v0.0.10-0.20220218081439-acccb9a5f299 h1:kT/fz5UN5jWKSmRvBY4OfrX4FcZlROltJQqNlvHJmBg=
-github.com/onmetal/onmetal-api v0.0.10-0.20220218081439-acccb9a5f299/go.mod h1:jl4+nnDCKFW7L7U82vUqGNSQrCeuTDu0QHYLetuOcz0=
+github.com/onmetal/controller-utils v0.4.0 h1:ELqWBfoUD+kzBKK1JkLRB45QsAAk7hsb1AzI5+beyI8=
+github.com/onmetal/controller-utils v0.4.0/go.mod h1:HE6K6mWXBOBI/HTCI/xT7nHWRJf+AWn0BmicQbtUfHg=
+github.com/onmetal/onmetal-api v0.0.10-0.20220221082953-050ab0a8cd56 h1:8SH17d4rTXSZg3uChxm1u4UjfBWOEf/5zW6GvKKZ0WE=
+github.com/onmetal/onmetal-api v0.0.10-0.20220221082953-050ab0a8cd56/go.mod h1:jl4+nnDCKFW7L7U82vUqGNSQrCeuTDu0QHYLetuOcz0=
 github.com/onsi/ginkgo v0.0.0-20170829012221-11459a886d9c/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.12.1/go.mod h1:zj2OWP4+oCPe1qIXoGWkgMRwljMUYCdkwsT2108oapk=

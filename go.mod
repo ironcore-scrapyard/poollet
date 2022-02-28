@@ -8,8 +8,8 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/addlicense v1.0.0
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/onmetal/controller-utils v0.3.2
-	github.com/onmetal/onmetal-api v0.0.10-0.20220218081439-acccb9a5f299
+	github.com/onmetal/controller-utils v0.4.0
+	github.com/onmetal/onmetal-api v0.0.10-0.20220221082953-050ab0a8cd56
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.18.1
 	github.com/spf13/pflag v1.0.5
@@ -21,6 +21,8 @@ require (
 	k8s.io/client-go v0.23.4
 	sigs.k8s.io/controller-runtime v0.11.1
 )
+
+require go.uber.org/zap v1.19.1
 
 require (
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
@@ -70,7 +72,6 @@ require (
 	go.starlark.net v0.0.0-20200306205701-8dd3e2ee1dd5 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	go.uber.org/zap v1.19.1 // indirect
 	go4.org/intern v0.0.0-20210108033219-3eb7198706b2 // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20201222180813-1025295fd063 // indirect
 	golang.org/x/mod v0.5.0 // indirect

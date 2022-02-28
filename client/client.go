@@ -1,4 +1,4 @@
-// Copyright 2021 OnMetal authors
+// Copyright 2022 OnMetal authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,17 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1alpha1
+package client
 
 import (
-	"fmt"
+	"context"
+
+	"github.com/onmetal/controller-utils/clientutils"
+	"github.com/onmetal/partitionlet/meta"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	VolumeParentNamespaceAnnotation = "partitionlet.onmetal.de/volume-parent-namespace"
-	VolumeParentNameAnnotation      = "partitionlet.onmetal.de/volume-parent-name"
-)
-
-func VolumeName(parentNamespace, parentName string) string {
-	return fmt.Sprintf("%s--%s", parentNamespace, parentName)
+func ListAndFilterParentControlledBy(ctx context.Context, c client.Client, parentOwner client.Object, list client.ObjectList, opts ...client.ListOption) error {
+	scheme := c.Scheme()
+	return clientutils.ListAndFilter(ctx, c, list, func(object client.Object) (bool, error) {
+		return meta.IsParentControlledBy(parentOwner, object, scheme)
+	}, opts...)
 }

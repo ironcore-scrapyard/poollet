@@ -17,18 +17,20 @@ package compute
 import (
 	"context"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-
+	. "github.com/onmetal/controller-utils/testutils"
+	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+	"github.com/onmetal/partitionlet/names"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gstruct"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	commonv1alpha1 "github.com/onmetal/onmetal-api/apis/common/v1alpha1"
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
-	partitionletcomputev1alpha1 "github.com/onmetal/partitionlet/apis/compute/v1alpha1"
 )
 
 var _ = Describe("MachineController", func() {
@@ -36,6 +38,60 @@ var _ = Describe("MachineController", func() {
 	ns := SetupTest(ctx)
 
 	It("should sync a machine from the parent cluster", func() {
+		By("creating a storage class")
+		storageClass := &storagev1alpha1.StorageClass{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "storage-class-",
+			},
+			Spec: storagev1alpha1.StorageClassSpec{
+				Capabilities: corev1.ResourceList{
+					"iops": resource.MustParse("1000"),
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, storageClass)).To(Succeed())
+
+		By("creating a volume using that storage class")
+		parentVolume := &storagev1alpha1.Volume{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:    ns.Name,
+				GenerateName: "machine-volume-",
+			},
+			Spec: storagev1alpha1.VolumeSpec{
+				StorageClassRef: corev1.LocalObjectReference{
+					Name: storageClass.Name,
+				},
+				Resources: corev1.ResourceList{
+					"storage": resource.MustParse("20Gi"),
+				},
+				StoragePool: corev1.LocalObjectReference{
+					Name: "some-storage-pool",
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, parentVolume)).To(Succeed())
+
+		By("creating a volume claim claiming that volume")
+		parentVolumeClaim := &storagev1alpha1.VolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:    ns.Name,
+				GenerateName: "machine-volumeclaim-",
+			},
+			Spec: storagev1alpha1.VolumeClaimSpec{
+				VolumeRef: corev1.LocalObjectReference{Name: parentVolume.Name},
+				Resources: corev1.ResourceList{
+					"storage": resource.MustParse("20Gi"),
+				},
+				StorageClassRef: corev1.LocalObjectReference{Name: storageClass.Name},
+			},
+		}
+		Expect(k8sClient.Create(ctx, parentVolumeClaim)).To(Succeed())
+
+		By("patching the volume claim to bound")
+		parentVolumeClaimBase := parentVolumeClaim.DeepCopy()
+		parentVolumeClaim.Status.Phase = storagev1alpha1.VolumeClaimBound
+		Expect(k8sClient.Status().Patch(ctx, parentVolumeClaim, client.MergeFrom(parentVolumeClaimBase))).To(Succeed())
+
 		By("creating a machine class")
 		machineClass := &computev1alpha1.MachineClass{
 			ObjectMeta: metav1.ObjectMeta{
@@ -50,7 +106,19 @@ var _ = Describe("MachineController", func() {
 		}
 		Expect(k8sClient.Create(ctx, machineClass)).To(Succeed())
 
-		By("creating a machine w/ that machine class")
+		By("creating an ignition config map")
+		parentIgnition := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:    ns.Name,
+				GenerateName: "cm-ignition-",
+			},
+			Data: map[string]string{
+				computev1alpha1.DefaultIgnitionKey: "my: ignition",
+			},
+		}
+		Expect(k8sClient.Create(ctx, parentIgnition)).To(Succeed())
+
+		By("creating a machine w/ machine class, ignition and attachment")
 		parentMachine := &computev1alpha1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:    ns.Name,
@@ -63,11 +131,26 @@ var _ = Describe("MachineController", func() {
 				MachinePool: corev1.LocalObjectReference{
 					Name: machinePoolName,
 				},
+				Ignition: &commonv1alpha1.ConfigMapKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: parentIgnition.Name,
+					},
+				},
 				Interfaces: []computev1alpha1.Interface{
 					{
 						Name: "myinterface",
 						Target: corev1.LocalObjectReference{
 							Name: "my-subnet",
+						},
+					},
+				},
+				VolumeAttachments: []computev1alpha1.VolumeAttachment{
+					{
+						Name: "myvolume",
+						VolumeAttachmentSource: computev1alpha1.VolumeAttachmentSource{
+							VolumeClaim: &computev1alpha1.VolumeClaimAttachmentSource{
+								Ref: corev1.LocalObjectReference{Name: parentVolumeClaim.Name},
+							},
 						},
 					},
 				},
@@ -75,26 +158,55 @@ var _ = Describe("MachineController", func() {
 		}
 		Expect(k8sClient.Create(ctx, parentMachine)).To(Succeed())
 
-		By("waiting for the machine to be synced")
+		By("waiting for the machine & ignition to be synced")
+		machineKey := names.Must(namesStrategy.Key(ctx, client.ObjectKeyFromObject(parentMachine), parentMachine))
+		machine := &computev1alpha1.Machine{}
+		ignition := &corev1.ConfigMap{}
+		volumeClaim := &storagev1alpha1.VolumeClaim{}
+		volumeKey := names.Must(namesStrategy.Key(ctx, client.ObjectKeyFromObject(parentVolume), parentVolume))
 		Eventually(func(g Gomega) {
-			key := client.ObjectKey{Namespace: ns.Name, Name: partitionletcomputev1alpha1.MachineName(ns.Name, parentMachine.Name)}
-			machine := &computev1alpha1.Machine{}
-			err := k8sClient.Get(ctx, key, machine)
+			err := k8sClient.Get(ctx, machineKey, machine)
 			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 			g.Expect(err).NotTo(HaveOccurred())
 
-			g.Expect(machine.Spec).To(Equal(computev1alpha1.MachineSpec{
-				MachineClass:        corev1.LocalObjectReference{Name: machineClass.Name},
-				MachinePoolSelector: sourceMachinePoolLabels,
-				Image:               parentMachine.Spec.Image,
-				Interfaces: []computev1alpha1.Interface{
+			g.Expect(machine.Spec).To(MatchFields(IgnoreExtras|IgnoreMissing, Fields{
+				"MachineClass":        Equal(corev1.LocalObjectReference{Name: machineClass.Name}),
+				"MachinePoolSelector": Equal(sourceMachinePoolLabels),
+				"MachinePool":         Equal(corev1.LocalObjectReference{Name: sourceMachinePoolName}),
+				"Interfaces": Equal([]computev1alpha1.Interface{
 					{
 						Name: "myinterface",
 						Target: corev1.LocalObjectReference{
 							Name: "my-subnet",
 						},
 					},
-				},
+				}),
+				"Ignition": Equal(&commonv1alpha1.ConfigMapKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: MachineIgnitionNameFromMachineName(machineKey.Name),
+					},
+				}),
+				"VolumeAttachments": ConsistOf(MatchFields(IgnoreExtras|IgnoreMissing, Fields{
+					"Name": Equal("myvolume"),
+					"VolumeAttachmentSource": MatchFields(IgnoreExtras|IgnoreMissing, Fields{
+						"VolumeClaim": PointTo(MatchFields(IgnoreExtras|IgnoreMissing, Fields{
+							"Ref": MatchFields(IgnoreExtras|IgnoreMissing, Fields{
+								"Name": Not(BeEmpty()),
+							}),
+						})),
+					}),
+				})),
+			}))
+
+			g.Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: machine.Namespace, Name: machine.Spec.Ignition.Name}, ignition)).To(Succeed())
+			g.Expect(ignition.Data[computev1alpha1.DefaultIgnitionKey]).To(Equal("my: ignition"))
+
+			g.Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: machine.Namespace, Name: machine.Spec.VolumeAttachments[0].VolumeClaim.Ref.Name}, volumeClaim)).To(Succeed())
+			g.Expect(volumeClaim.Spec).To(Equal(storagev1alpha1.VolumeClaimSpec{
+				VolumeRef:       corev1.LocalObjectReference{Name: volumeKey.Name},
+				Selector:        nil,
+				Resources:       parentVolume.Spec.Resources,
+				StorageClassRef: parentVolume.Spec.StorageClassRef,
 			}))
 		}, timeout, interval).Should(Succeed())
 
@@ -108,9 +220,7 @@ var _ = Describe("MachineController", func() {
 
 		By("waiting for the machine interfaces to be synced")
 		Eventually(func(g Gomega) {
-			key := client.ObjectKey{Namespace: ns.Name, Name: partitionletcomputev1alpha1.MachineName(ns.Name, parentMachine.Name)}
-			machine := &computev1alpha1.Machine{}
-			err := k8sClient.Get(ctx, key, machine)
+			err := k8sClient.Get(ctx, machineKey, machine)
 			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
 			g.Expect(err).NotTo(HaveOccurred())
 
@@ -119,192 +229,17 @@ var _ = Describe("MachineController", func() {
 				IP:   commonv1alpha1.MustParseIP("10.0.0.1"),
 			}}))
 		}, timeout, interval).Should(Succeed())
-	})
 
-	It("should reconcile machines if the machine class appears later than the machine", func() {
-		const machineClassName = "later-class"
-		By("creating a machine w/ that machine class")
-		parentMachine := &computev1alpha1.Machine{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace:    ns.Name,
-				GenerateName: "machine-",
-			},
-			Spec: computev1alpha1.MachineSpec{
-				MachineClass: corev1.LocalObjectReference{
-					Name: machineClassName,
-				},
-				MachinePool: corev1.LocalObjectReference{
-					Name: machinePoolName,
-				},
-			},
-		}
-		Expect(k8sClient.Create(ctx, parentMachine)).To(Succeed())
+		By("deleting the parent machine")
+		Expect(k8sClient.Delete(ctx, parentMachine)).To(Succeed())
 
-		By("creating a machine class")
-		machineClass := &computev1alpha1.MachineClass{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: machineClassName,
-			},
-			Spec: computev1alpha1.MachineClassSpec{
-				Capabilities: corev1.ResourceList{
-					"cpu":    resource.MustParse("1"),
-					"memory": resource.MustParse("1Gi"),
-				},
-			},
-		}
-		Expect(k8sClient.Create(ctx, machineClass)).To(Succeed())
-
-		By("waiting for the machine to be synced")
+		By("waiting for the machine and all its dependencies to be gone")
+		ignitionKey := client.ObjectKeyFromObject(ignition)
+		volumeClaimKey := client.ObjectKeyFromObject(volumeClaim)
 		Eventually(func(g Gomega) {
-			key := client.ObjectKey{Namespace: ns.Name, Name: partitionletcomputev1alpha1.MachineName(ns.Name, parentMachine.Name)}
-			machine := &computev1alpha1.Machine{}
-			err := k8sClient.Get(ctx, key, machine)
-			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
-			g.Expect(err).NotTo(HaveOccurred())
-
-			g.Expect(machine.Spec).To(Equal(computev1alpha1.MachineSpec{
-				MachineClass:        corev1.LocalObjectReference{Name: machineClassName},
-				MachinePoolSelector: sourceMachinePoolLabels,
-				Image:               parentMachine.Spec.Image,
-			}))
-		}, timeout, interval).Should(Succeed())
-	})
-
-	It("shouldn't sync config map if it's not mentioned by any Machine", func() {
-		By("creating a config map")
-		configMap := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: "config-map-",
-				Namespace:    ns.Name,
-			},
-		}
-		Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
-
-		By("checking that ConfigMap wasn't synced")
-		Consistently(func(g Gomega) {
-			cm := &corev1.ConfigMap{}
-			key := client.ObjectKey{
-				Name:      partitionletcomputev1alpha1.IgnitionConfigName(ns.Name, configMap.Name),
-				Namespace: ns.Name,
-			}
-			err := k8sClient.Get(ctx, key, cm)
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-		}, timeout, interval).Should(Succeed())
-	})
-
-	It("should sync config map if machine already exists", func() {
-		By("creating a machine class")
-		machineClass := &computev1alpha1.MachineClass{
-			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: "class-",
-			},
-			Spec: computev1alpha1.MachineClassSpec{
-				Capabilities: corev1.ResourceList{
-					"cpu":    resource.MustParse("1"),
-					"memory": resource.MustParse("1Gi"),
-				},
-			},
-		}
-		Expect(k8sClient.Create(ctx, machineClass)).To(Succeed())
-
-		By("creating a machine")
-		ignitionConfigMapName := "ignition-config-map"
-		machine := &computev1alpha1.Machine{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace:    ns.Name,
-				GenerateName: "machine-",
-			},
-			Spec: computev1alpha1.MachineSpec{
-				MachineClass: corev1.LocalObjectReference{
-					Name: machineClass.Name,
-				},
-				MachinePool: corev1.LocalObjectReference{
-					Name: machinePoolName,
-				},
-				Ignition: &commonv1alpha1.ConfigMapKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: ignitionConfigMapName,
-					},
-				},
-			},
-		}
-		Expect(k8sClient.Create(ctx, machine)).To(Succeed())
-
-		By("creating a config map")
-		configMap := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      ignitionConfigMapName,
-				Namespace: ns.Name,
-			},
-		}
-		Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
-
-		By("checking that config map was synced")
-		Eventually(func(g Gomega) {
-			cm := &corev1.ConfigMap{}
-			key := client.ObjectKey{
-				Name:      partitionletcomputev1alpha1.IgnitionConfigName(ns.Name, configMap.Name),
-				Namespace: ns.Name,
-			}
-			g.Expect(k8sClient.Get(ctx, key, cm)).NotTo(HaveOccurred())
-		}, timeout, interval).Should(Succeed())
-	})
-
-	It("should sync config map if machine created after config map", func() {
-		By("creating a config map")
-		ignitionConfigMapName := "ignition-config-map"
-		configMap := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      ignitionConfigMapName,
-				Namespace: ns.Name,
-			},
-		}
-		Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
-
-		By("creating a machine class")
-		machineClass := &computev1alpha1.MachineClass{
-			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: "class-",
-			},
-			Spec: computev1alpha1.MachineClassSpec{
-				Capabilities: corev1.ResourceList{
-					"cpu":    resource.MustParse("1"),
-					"memory": resource.MustParse("1Gi"),
-				},
-			},
-		}
-		Expect(k8sClient.Create(ctx, machineClass)).To(Succeed())
-
-		By("creating a machine")
-		machine := &computev1alpha1.Machine{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace:    ns.Name,
-				GenerateName: "machine-",
-			},
-			Spec: computev1alpha1.MachineSpec{
-				MachineClass: corev1.LocalObjectReference{
-					Name: machineClass.Name,
-				},
-				MachinePool: corev1.LocalObjectReference{
-					Name: machinePoolName,
-				},
-				Ignition: &commonv1alpha1.ConfigMapKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: ignitionConfigMapName,
-					},
-				},
-			},
-		}
-		Expect(k8sClient.Create(ctx, machine)).To(Succeed())
-
-		By("checking that config map was synced")
-		Eventually(func(g Gomega) {
-			cm := &corev1.ConfigMap{}
-			key := client.ObjectKey{
-				Name:      partitionletcomputev1alpha1.IgnitionConfigName(ns.Name, configMap.Name),
-				Namespace: ns.Name,
-			}
-			g.Expect(k8sClient.Get(ctx, key, cm)).NotTo(HaveOccurred())
+			g.Expect(k8sClient.Get(ctx, machineKey, machine)).To(MatchErrorFunc(apierrors.IsNotFound))
+			g.Expect(k8sClient.Get(ctx, ignitionKey, ignition)).To(MatchErrorFunc(apierrors.IsNotFound))
+			g.Expect(k8sClient.Get(ctx, volumeClaimKey, volumeClaim)).To(MatchErrorFunc(apierrors.IsNotFound))
 		}, timeout, interval).Should(Succeed())
 	})
 })

@@ -15,17 +15,18 @@
 package compute
 
 import (
+	"context"
+
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("MachinePoolController", func() {
-	ctx := controllerruntime.SetupSignalHandler()
+	ctx := context.Background()
 	_ = SetupTest(ctx)
 
 	It("should sync its machine pool from the source machine pools", func() {
@@ -64,10 +65,10 @@ var _ = Describe("MachinePoolController", func() {
 		By("waiting for the accumulating machine pool to report both classes")
 		Eventually(func(g Gomega) {
 			pool := &computev1alpha1.MachinePool{}
-			Expect(k8sClient.Get(ctx, client.ObjectKey{Name: "my-pool"}, pool)).To(Succeed())
+			Expect(k8sClient.Get(ctx, client.ObjectKey{Name: machinePoolName}, pool)).To(Succeed())
 
 			By("inspecting the pool")
-			Expect(pool.Spec.ProviderID).To(Equal("custom://pool"))
+			Expect(pool.Spec.ProviderID).To(Equal(machinePoolProviderID))
 			g.Expect(pool.Status.AvailableMachineClasses).To(ConsistOf(
 				corev1.LocalObjectReference{Name: "foo"},
 				corev1.LocalObjectReference{Name: "bar"},

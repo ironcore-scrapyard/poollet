@@ -22,6 +22,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/onmetal/partitionlet/controllers/shared"
+	"github.com/onmetal/partitionlet/names"
 	flag "github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
@@ -85,34 +87,47 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+
 	var parentKubeconfig string
+
 	var namespace string
+
 	var machinePoolName string
-	var storagePoolName string
 	var machinePoolProviderID string
-	var storagePoolProviderID string
-	var sourceMachinePoolSelector map[string]string
 	var machinePoolLabels map[string]string
 	var machinePoolAnnotations map[string]string
-	var sourceStoragePoolSelector map[string]string
+	var sourceMachinePoolSelector map[string]string
+	var sourceMachinePoolName string
+
+	var storagePoolName string
+	var storagePoolProviderID string
 	var storagePoolLabels map[string]string
 	var storagePoolAnnotations map[string]string
+	var sourceStoragePoolName string
+	var sourceStoragePoolSelector map[string]string
+
 	flag.StringVar(&leaderElectionID, "leader-election-id", "ba861938.onmetal.de", "Leader election id to use.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+
 	flag.StringVar(&parentKubeconfig, "parent-kubeconfig", "", "Path pointing to a parent kubeconfig.")
+
 	flag.StringVar(&namespace, "namespace", corev1.NamespaceDefault, "Namespace to sync machines to.")
+
 	flag.StringVar(&machinePoolName, "machine-pool-name", hostName, "MachinePool to announce in the parent cluster.")
 	flag.StringVar(&machinePoolProviderID, "machine-pool-provider-id", "", "Provider ID (usually <provider-type>://<id>) of the announced MachinePool.")
-	flag.StringToStringVar(&sourceMachinePoolSelector, "source-machine-pool-selector", nil, "Selector of source machine pools")
 	flag.StringToStringVar(&machinePoolLabels, "machine-pool-labels", nil, "Labels to apply to the machine pool upon startup.")
 	flag.StringToStringVar(&machinePoolAnnotations, "machine-pool-annotations", nil, "Annotations to apply to the machine pool upon startup.")
+	flag.StringToStringVar(&sourceMachinePoolSelector, "source-machine-pool-selector", nil, "Selector of source machine pools.")
+	flag.StringVar(&sourceMachinePoolName, "source-machine-pool-name", "", "Name of the source machine pool.")
+
 	flag.StringVar(&storagePoolName, "storage-pool-name", hostName, "StoragePool to announce in the parent cluster.")
 	flag.StringVar(&storagePoolProviderID, "storage-pool-provider-id", "", "Provider ID (usually <provider-type>://<id>) of the announced StoragePool.")
-	flag.StringToStringVar(&sourceStoragePoolSelector, "source-storage-pool-selector", nil, "Selector of source storage pools")
+	flag.StringVar(&sourceStoragePoolName, "source-storage-pool-name", "", "Name of the source storage pool.")
+	flag.StringToStringVar(&sourceStoragePoolSelector, "source-storage-pool-selector", nil, "Selector of source storage pools.")
 	flag.StringToStringVar(&storagePoolLabels, "storage-pool-labels", nil, "Labels to apply to the storage pool upon startup.")
 	flag.StringToStringVar(&storagePoolAnnotations, "storage-pool-annotations", nil, "Annotations to apply to the storage pool upon startup.")
 
@@ -151,6 +166,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	namesStrategy := &names.FixedNamespaceNamespacedNameStrategy{
+		Namespace: namespace,
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
@@ -177,6 +196,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	sharedParentFieldIndexer := shared.NewParentFieldIndexer(machinePoolName, parentCluster.GetFieldIndexer(), mgr.GetScheme())
+
 	if controllers.Enabled(machinePoolController) {
 		if machinePoolProviderID == "" {
 			err := fmt.Errorf("machine pool provider id needs to be set")
@@ -200,11 +221,14 @@ func main() {
 	if controllers.Enabled(machineController) {
 		if err = (&compute.MachineReconciler{
 			Client:                    mgr.GetClient(),
+			Scheme:                    mgr.GetScheme(),
 			ParentClient:              parentCluster.GetClient(),
 			ParentCache:               parentCluster.GetCache(),
 			ParentFieldIndexer:        parentCluster.GetFieldIndexer(),
-			Namespace:                 namespace,
+			SharedParentFieldIndexer:  sharedParentFieldIndexer,
+			NamesStrategy:             namesStrategy,
 			MachinePoolName:           machinePoolName,
+			SourceMachinePoolName:     sourceMachinePoolName,
 			SourceMachinePoolSelector: sourceMachinePoolSelector,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "Machine")
@@ -214,11 +238,15 @@ func main() {
 	if controllers.Enabled(volumeController) {
 		if err := (&storage.VolumeReconciler{
 			Client:                    mgr.GetClient(),
+			Scheme:                    mgr.GetScheme(),
 			ParentClient:              parentCluster.GetClient(),
 			ParentCache:               parentCluster.GetCache(),
 			ParentFieldIndexer:        parentCluster.GetFieldIndexer(),
-			Namespace:                 namespace,
+			SharedParentFieldIndexer:  sharedParentFieldIndexer,
+			NamesStrategy:             namesStrategy,
 			StoragePoolName:           storagePoolName,
+			MachinePoolName:           machinePoolName,
+			SourceStoragePoolName:     sourceStoragePoolName,
 			SourceStoragePoolSelector: sourceStoragePoolSelector,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "Volume")

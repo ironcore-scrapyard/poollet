@@ -18,13 +18,16 @@ package compute
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
+	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
+	"github.com/onmetal/partitionlet/controllers/shared"
+	"github.com/onmetal/partitionlet/controllers/storage"
+	"github.com/onmetal/partitionlet/names"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,7 +41,7 @@ import (
 
 	"github.com/onmetal/controller-utils/envtestutils"
 	"github.com/onmetal/controller-utils/kustomizeutils"
-	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
+	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -48,6 +51,13 @@ import (
 var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
+var namesStrategy names.Strategy
+var sourceStoragePoolLabels = map[string]string{
+	"storagepool-kind": "source",
+}
+var sourceMachinePoolLabels = map[string]string{
+	"machinepool-kind": "source",
+}
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -55,25 +65,24 @@ func TestAPIs(t *testing.T) {
 	RunSpecs(t, "Controller Suite")
 }
 
-var sourceMachinePoolLabels = map[string]string{
-	"machinepool-kind": "source",
-}
-
 const (
-	machinePoolName       = "my-pool"
-	machinePoolProviderID = "custom://pool"
-	timeout               = 2 * time.Second
-	interval              = 100 * time.Millisecond
+	timeout  = 2 * time.Second
+	interval = 100 * time.Millisecond
+
+	storagePoolName       = "my-storage-pool"
+	storagePoolProviderID = "custom://storage-pool"
+	sourceStoragePoolName = "my-source-storage-pool"
+
+	machinePoolName       = "my-machine-pool"
+	machinePoolProviderID = "custom://machine-pool"
+	sourceMachinePoolName = "my-source-machine-pool"
 )
 
 var _ = BeforeSuite(func() {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-2))))
 
 	onmetalCRDs := &apiextensionsv1.CustomResourceDefinitionList{}
-	if os.Getenv("GITHUB_ACTIONS") == "true" {
-		Expect(os.MkdirAll(filepath.Join("git@github.com", "onmetal", "onmetal-api", "config"), 0777))
-	}
-	Expect(kustomizeutils.RunKustomizeIntoList(".", scheme.Codecs.UniversalDeserializer(), onmetalCRDs)).To(Succeed())
+	Expect(kustomizeutils.RunKustomizeIntoList("../shared", scheme.Codecs.UniversalDeserializer(), onmetalCRDs)).To(Succeed())
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -86,6 +95,9 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 
 	err = computev1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = storagev1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:scheme
@@ -110,6 +122,8 @@ func SetupTest(ctx context.Context) *corev1.Namespace {
 		}
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed(), "failed to create test namespace")
 
+		namesStrategy = names.FixedNamespaceNamespacedNameStrategy{Namespace: ns.Name}
+
 		k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 			Scheme:             scheme.Scheme,
 			Host:               "127.0.0.1",
@@ -117,22 +131,51 @@ func SetupTest(ctx context.Context) *corev1.Namespace {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
+		indexer := shared.NewParentFieldIndexer(machinePoolName, k8sManager.GetFieldIndexer(), k8sManager.GetScheme())
+
 		// register reconciler here
+		Expect((&MachineReconciler{
+			Client:                    k8sManager.GetClient(),
+			Scheme:                    k8sManager.GetScheme(),
+			ParentClient:              k8sManager.GetClient(),
+			ParentCache:               k8sManager.GetCache(),
+			ParentFieldIndexer:        k8sManager.GetFieldIndexer(),
+			SharedParentFieldIndexer:  indexer,
+			NamesStrategy:             namesStrategy,
+			MachinePoolName:           machinePoolName,
+			SourceMachinePoolName:     sourceMachinePoolName,
+			SourceMachinePoolSelector: sourceMachinePoolLabels,
+		}).SetupWithManager(k8sManager)).To(Succeed())
+
+		Expect((&storage.VolumeReconciler{
+			Client:                    k8sManager.GetClient(),
+			Scheme:                    k8sManager.GetScheme(),
+			ParentClient:              k8sManager.GetClient(),
+			ParentCache:               k8sManager.GetCache(),
+			ParentFieldIndexer:        k8sManager.GetFieldIndexer(),
+			SharedParentFieldIndexer:  indexer,
+			NamesStrategy:             namesStrategy,
+			StoragePoolName:           storagePoolName,
+			MachinePoolName:           machinePoolName,
+			SourceStoragePoolName:     sourceStoragePoolName,
+			SourceStoragePoolSelector: sourceStoragePoolLabels,
+		}).SetupWithManager(k8sManager)).To(Succeed())
+
+		Expect((&storage.StoragePoolReconciler{
+			Client:                    k8sManager.GetClient(),
+			ParentClient:              k8sManager.GetClient(),
+			ParentCache:               k8sManager.GetCache(),
+			StoragePoolName:           storagePoolName,
+			ProviderID:                storagePoolProviderID,
+			SourceStoragePoolSelector: sourceStoragePoolLabels,
+		}).SetupWithManager(k8sManager)).To(Succeed())
+
 		Expect((&MachinePoolReconciler{
 			Client:                    k8sManager.GetClient(),
 			ParentClient:              k8sManager.GetClient(),
 			ParentCache:               k8sManager.GetCache(),
 			MachinePoolName:           machinePoolName,
 			ProviderID:                machinePoolProviderID,
-			SourceMachinePoolSelector: sourceMachinePoolLabels,
-		}).SetupWithManager(k8sManager)).To(Succeed())
-		Expect((&MachineReconciler{
-			Namespace:                 ns.Name,
-			Client:                    k8sManager.GetClient(),
-			ParentClient:              k8sManager.GetClient(),
-			ParentCache:               k8sManager.GetCache(),
-			ParentFieldIndexer:        k8sManager.GetFieldIndexer(),
-			MachinePoolName:           machinePoolName,
 			SourceMachinePoolSelector: sourceMachinePoolLabels,
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
@@ -144,7 +187,7 @@ func SetupTest(ctx context.Context) *corev1.Namespace {
 	AfterEach(func() {
 		cancel()
 		Expect(k8sClient.Delete(ctx, ns)).To(Succeed(), "failed to delete test namespace")
-		Expect(k8sClient.DeleteAllOf(ctx, &computev1alpha1.MachinePool{})).To(Succeed())
+		Expect(k8sClient.DeleteAllOf(ctx, &storagev1alpha1.StorageClass{})).To(Succeed())
 		Expect(k8sClient.DeleteAllOf(ctx, &computev1alpha1.MachineClass{})).To(Succeed())
 	})
 

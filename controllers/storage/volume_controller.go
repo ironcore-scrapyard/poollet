@@ -19,9 +19,15 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"github.com/onmetal/controller-utils/clientutils"
+	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
+	"github.com/onmetal/partitionlet/controllers/shared"
+	partitionletmeta "github.com/onmetal/partitionlet/meta"
+	"github.com/onmetal/partitionlet/names"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,23 +40,28 @@ import (
 
 	"github.com/onmetal/controller-utils/conditionutils"
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
-	partitionletstoragev1alpha1 "github.com/onmetal/partitionlet/apis/storage/v1alpha1"
 	partitionlethandler "github.com/onmetal/partitionlet/handler"
 )
 
 const (
-	volumeFinalizer        = "partitionlet.onmetal.de/volume"
-	volumeFieldOwner       = client.FieldOwner("partitionlet.onmetal.de/volume")
-	volumeStoragePoolField = ".spec.storagePool.name"
+	volumeFinalizer = "partitionlet.onmetal.de/volume"
 )
 
 type VolumeReconciler struct {
 	client.Client
-	ParentClient              client.Client
-	ParentCache               cache.Cache
-	Namespace                 string
-	StoragePoolName           string
-	ParentFieldIndexer        client.FieldIndexer
+	Scheme *runtime.Scheme
+
+	ParentClient             client.Client
+	ParentCache              cache.Cache
+	ParentFieldIndexer       client.FieldIndexer
+	SharedParentFieldIndexer *clientutils.SharedFieldIndexer
+
+	NamesStrategy names.Strategy
+
+	StoragePoolName string
+	MachinePoolName string
+
+	SourceStoragePoolName     string
 	SourceStoragePoolSelector map[string]string
 }
 
@@ -69,49 +80,113 @@ func (r *VolumeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return r.reconcileExists(ctx, log, volume)
 }
 
-func (r *VolumeReconciler) reconcileExists(ctx context.Context, log logr.Logger, volume *storagev1alpha1.Volume) (ctrl.Result, error) {
-	if !volume.DeletionTimestamp.IsZero() {
-		return r.delete(ctx, log, volume)
+func (r *VolumeReconciler) reconcileExists(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume) (ctrl.Result, error) {
+	volumeKey, err := r.NamesStrategy.Key(ctx, client.ObjectKeyFromObject(parentVolume), parentVolume)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("error determining volume key: %w", err)
 	}
-	return r.reconcile(ctx, log, volume)
+
+	log = log.WithValues("VolumeKey", volumeKey)
+	ctx = ctrl.LoggerInto(ctx, log)
+
+	if !parentVolume.DeletionTimestamp.IsZero() {
+		return r.delete(ctx, log, parentVolume, volumeKey)
+	}
+
+	used, err := r.isParentUsed(ctx, log, parentVolume)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("error determining whether parent is used: %w", err)
+	}
+
+	if !used {
+		log.V(1).Info("Parent is not used, continuing with deletion flow")
+		return r.delete(ctx, log, parentVolume, volumeKey)
+	}
+
+	log.V(1).Info("Parent is used, continuing with reconciliation flow")
+	return r.reconcile(ctx, log, parentVolume, volumeKey)
 }
 
-func (r *VolumeReconciler) delete(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume) (ctrl.Result, error) {
-	if !controllerutil.ContainsFinalizer(parentVolume, volumeFinalizer) {
+func (r *VolumeReconciler) isParentUsed(ctx context.Context, log logr.Logger, parent *storagev1alpha1.Volume) (bool, error) {
+	// If we are the storage pool of a volume, sync it.
+	if r.StoragePoolName != "" {
+		used, err := r.isParentUsedViaStoragePool(ctx, parent)
+		if err != nil {
+			return false, err
+		}
+
+		log.V(2).Info("Parent used via storage pool", "Used", used)
+		if used {
+			return used, nil
+		}
+	}
+
+	// If we started without a machine pool name, we are not monitoring for volumes scheduled
+	// onto machines assigned to our machine pool.
+	if r.MachinePoolName != "" {
+		used, err := r.isParentUsedViaMachinePool(ctx, parent)
+		if err != nil {
+			return false, err
+		}
+
+		log.V(2).Info("Parent used via machine pool", "Used", used)
+		if used {
+			return used, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (r *VolumeReconciler) isParentUsedViaStoragePool(ctx context.Context, parent *storagev1alpha1.Volume) (bool, error) {
+	return parent.Spec.StoragePool.Name == r.StoragePoolName, nil
+}
+
+func (r *VolumeReconciler) isParentUsedViaMachinePool(ctx context.Context, parent *storagev1alpha1.Volume) (bool, error) {
+	// Check if the volume is on a machine that's scheduled onto us.
+	claimName := parent.Spec.ClaimRef.Name
+	if claimName == "" {
+		return false, nil
+	}
+
+	machineList := &computev1alpha1.MachineList{}
+	err := r.ParentClient.List(ctx, machineList,
+		client.InNamespace(parent.Namespace),
+		client.Limit(1),
+		client.MatchingFields{
+			shared.MachineSpecVolumeAttachmentsVolumeClaimRefNameField: claimName,
+		},
+	)
+	if err != nil {
+		return false, fmt.Errorf("error listing machines using claim using volume %s: %w", client.ObjectKeyFromObject(parent), err)
+	}
+	return len(machineList.Items) > 0, nil
+}
+
+func (r *VolumeReconciler) delete(ctx context.Context, log logr.Logger, parent *storagev1alpha1.Volume, volumeKey client.ObjectKey) (ctrl.Result, error) {
+	if !controllerutil.ContainsFinalizer(parent, volumeFinalizer) {
 		log.V(1).Info("Volume contains no finalizer, no deletion needs to be done")
 		return ctrl.Result{}, nil
 	}
 
-	objectsToDelete := []client.Object{
-		&storagev1alpha1.Volume{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: r.Namespace,
-				Name:      partitionletstoragev1alpha1.VolumeName(parentVolume.Namespace, parentVolume.Name),
-			},
+	log.V(1).Info("Deleting object")
+	existed, err := clientutils.DeleteIfExists(ctx, r.Client, &storagev1alpha1.Volume{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: volumeKey.Namespace,
+			Name:      volumeKey.Name,
 		},
+	})
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("error deleting %s: %w", volumeKey, err)
 	}
 
-	var goneCt int
-	log.V(1).Info("Deleting dependent objects")
-	for _, objectToDelete := range objectsToDelete {
-		log.V(1).Info("Deleting dependent object", "Type", fmt.Sprintf("%T", objectToDelete), "DependentKey", client.ObjectKeyFromObject(objectToDelete))
-		if err := r.Delete(ctx, objectToDelete); err != nil {
-			if !apierrors.IsNotFound(err) {
-				return ctrl.Result{}, fmt.Errorf("error deleting %T %s: %w", objectToDelete, client.ObjectKeyFromObject(objectToDelete), err)
-			}
-			goneCt++
-		}
-	}
-
-	if goneCt != len(objectsToDelete) {
-		log.V(1).Info("Not all dependent objects are gone", "Expected", len(objectsToDelete), "Actual", goneCt)
+	if existed {
+		log.V(1).Info("Object is not yet gone, requeueing")
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	log.V(1).Info("All dependent objects are gone, removing finalizer to allow deletion")
-	base := parentVolume.DeepCopy()
-	controllerutil.RemoveFinalizer(parentVolume, volumeFinalizer)
-	if err := r.ParentClient.Patch(ctx, parentVolume, client.MergeFrom(base)); err != nil {
+	log.V(1).Info("Object is gone, removing finalizer on parent object")
+	if err := clientutils.PatchRemoveFinalizer(ctx, r.ParentClient, parent, volumeFinalizer); err != nil {
 		return ctrl.Result{}, fmt.Errorf("error removing finalizer: %w", err)
 	}
 
@@ -119,97 +194,180 @@ func (r *VolumeReconciler) delete(ctx context.Context, log logr.Logger, parentVo
 	return ctrl.Result{}, nil
 }
 
-func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume) (ctrl.Result, error) {
-	log.Info("Reconciling volume")
-	if !controllerutil.ContainsFinalizer(parentVolume, volumeFinalizer) {
-		base := parentVolume.DeepCopy()
-		controllerutil.AddFinalizer(parentVolume, volumeFinalizer)
-		if err := r.ParentClient.Patch(ctx, parentVolume, client.MergeFrom(base)); err != nil {
-			return ctrl.Result{}, fmt.Errorf("could not set finalizer: %w", err)
-		}
-		return ctrl.Result{}, nil
+func (r *VolumeReconciler) patchParentStatus(
+	ctx context.Context,
+	parent *storagev1alpha1.Volume,
+	state storagev1alpha1.VolumeState,
+	phase storagev1alpha1.VolumePhase,
+	syncStatus corev1.ConditionStatus,
+	syncReason, syncMessage string,
+) error {
+	if r.StoragePoolName == "" || parent.Spec.StoragePool.Name != r.StoragePoolName {
+		return nil
+	}
+	baseParent := parent.DeepCopy()
+	parent.Status.State = state
+	parent.Status.Phase = phase
+	conditionutils.MustUpdateSlice(&parent.Status.Conditions, string(storagev1alpha1.VolumeSynced),
+		conditionutils.UpdateStatus(syncStatus),
+		conditionutils.UpdateReason(syncReason),
+		conditionutils.UpdateMessage(syncMessage),
+		conditionutils.UpdateObserved(parent),
+	)
+	if err := r.ParentClient.Status().Patch(ctx, parent, client.MergeFrom(baseParent)); err != nil {
+		return fmt.Errorf("error patching parent status: %w", err)
+	}
+	return nil
+}
+
+func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume, volumeKey client.ObjectKey) (ctrl.Result, error) {
+	log.V(1).Info("Reconciling")
+	modified, err := clientutils.PatchEnsureFinalizer(ctx, r.ParentClient, parentVolume, volumeFinalizer)
+	if err != nil || modified {
+		return ctrl.Result{}, err
 	}
 
+	ok, err := r.getStorageClass(ctx, log, parentVolume)
+	if err != nil || !ok {
+		return r.patchParentStatusStorageClassIssue(ctx, log, parentVolume, err)
+	}
+
+	child, err := r.applyVolume(ctx, log, parentVolume, volumeKey)
+	if err != nil {
+		return r.patchParentStatusApplyIssue(ctx, log, parentVolume, err)
+	}
+
+	return r.patchParentStatusSuccessfulSync(ctx, log, parentVolume, child)
+}
+
+func (r *VolumeReconciler) patchParentStatusSuccessfulSync(ctx context.Context, log logr.Logger, parent *storagev1alpha1.Volume, child *storagev1alpha1.Volume) (ctrl.Result, error) {
+	if err := r.patchParentStatus(ctx, parent, child.Status.State, child.Status.Phase, corev1.ConditionTrue, "Synced", "Successfully synced volume."); err != nil {
+		log.Error(err, "Error patching parent status")
+		return ctrl.Result{}, fmt.Errorf("error patching parent status")
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *VolumeReconciler) patchParentStatusApplyIssue(ctx context.Context, log logr.Logger, parent *storagev1alpha1.Volume, err error) (ctrl.Result, error) {
+	if err := r.patchParentStatus(
+		ctx,
+		parent,
+		storagev1alpha1.VolumeStateError,
+		storagev1alpha1.VolumePending,
+		corev1.ConditionFalse,
+		"ApplyFailed",
+		fmt.Sprintf("Applying the child volume resulted in an error: %v", err),
+	); err != nil {
+		log.Error(err, "Error patching parent status")
+	}
+	return ctrl.Result{}, fmt.Errorf("error applying child: %w", err)
+}
+
+func (r *VolumeReconciler) applyVolume(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume, volumeKey client.ObjectKey) (*storagev1alpha1.Volume, error) {
+	log.V(1).Info("Applying volume")
+	volume := &storagev1alpha1.Volume{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: volumeKey.Namespace,
+			Name:      volumeKey.Name,
+		},
+		Spec: storagev1alpha1.VolumeSpec{
+			StorageClassRef:     parentVolume.Spec.StorageClassRef,
+			StoragePoolSelector: r.SourceStoragePoolSelector,
+			StoragePool: corev1.LocalObjectReference{
+				Name: r.SourceStoragePoolName,
+			},
+			Resources:   parentVolume.Spec.Resources,
+			Tolerations: nil, // TODO: Translate tolerations
+		},
+	}
+	if _, err := controllerutil.CreateOrPatch(ctx, r.Client, volume, func() error {
+		// TODO: Translate tolerations
+		volume.Spec.StorageClassRef = parentVolume.Spec.StorageClassRef
+		volume.Spec.StoragePoolSelector = r.SourceStoragePoolSelector
+		volume.Spec.StoragePool = corev1.LocalObjectReference{
+			Name: r.SourceStoragePoolName,
+		}
+		volume.Spec.Resources = parentVolume.Spec.Resources
+		return partitionletmeta.SetParentControllerReference(parentVolume, volume, r.Scheme)
+	}); err != nil {
+		return nil, fmt.Errorf("error applying volume %s: %w", volumeKey, err)
+	}
+
+	log.V(1).Info("Successfully applied volume")
+	return volume, nil
+}
+
+func (r *VolumeReconciler) patchParentStatusStorageClassIssue(ctx context.Context, log logr.Logger, parent *storagev1alpha1.Volume, err error) (ctrl.Result, error) {
+	if err != nil {
+		if err := r.patchParentStatus(
+			ctx,
+			parent,
+			storagev1alpha1.VolumeStateError,
+			storagev1alpha1.VolumePending,
+			corev1.ConditionFalse,
+			"StorageClassError",
+			fmt.Sprintf("Error validating storage class: %v", err),
+		); err != nil {
+			log.Error(err, "Error patching parent status")
+		}
+		return ctrl.Result{}, err
+	}
+	if err := r.patchParentStatus(
+		ctx,
+		parent,
+		storagev1alpha1.VolumeStateError,
+		storagev1alpha1.VolumePending,
+		corev1.ConditionFalse,
+		"UnsupportedStorageClass",
+		fmt.Sprintf("Storage class %q is not supported", parent.Spec.StorageClassRef.Name),
+	); err != nil {
+		return ctrl.Result{}, fmt.Errorf("error patching parent status: %w", err)
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *VolumeReconciler) getStorageClass(ctx context.Context, log logr.Logger, parent *storagev1alpha1.Volume) (bool, error) {
 	storageClass := &storagev1alpha1.StorageClass{}
-	storageClassKey := client.ObjectKey{Name: parentVolume.Spec.StorageClassRef.Name}
+	storageClassKey := client.ObjectKey{Name: parent.Spec.StorageClassRef.Name}
 	log.V(1).Info("Getting storage class", "StorageClass", storageClassKey)
 	if err := r.Get(ctx, storageClassKey, storageClass); err != nil {
 		if !apierrors.IsNotFound(err) {
-			return ctrl.Result{}, fmt.Errorf("error getting storage class: %w", err)
+			return false, fmt.Errorf("error getting storage class %s: %w", storageClassKey, err)
 		}
-
-		base := parentVolume.DeepCopy()
-		conditionutils.MustUpdateSlice(&parentVolume.Status.Conditions, string(storagev1alpha1.VolumeSynced),
-			conditionutils.UpdateStatus(corev1.ConditionFalse),
-			conditionutils.UpdateReason("StorageClassNotFound"),
-			conditionutils.UpdateMessage("The referenced storage class does not exist in this partition."),
-			conditionutils.UpdateObserved(parentVolume),
-		)
-		if err := r.ParentClient.Status().Patch(ctx, parentVolume, client.MergeFrom(base)); err != nil {
-			return ctrl.Result{}, fmt.Errorf("error updating status: %w", err)
-		}
-		return ctrl.Result{}, nil
+		return false, nil
 	}
-
-	volume := &storagev1alpha1.Volume{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: storagev1alpha1.GroupVersion.String(),
-			Kind:       "Volume",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: r.Namespace,
-			Name:      partitionletstoragev1alpha1.VolumeName(parentVolume.Namespace, parentVolume.Name),
-			Annotations: map[string]string{
-				partitionletstoragev1alpha1.VolumeParentNamespaceAnnotation: parentVolume.Namespace,
-				partitionletstoragev1alpha1.VolumeParentNameAnnotation:      parentVolume.Name,
-			},
-		},
-		Spec: storagev1alpha1.VolumeSpec{
-			StoragePoolSelector: r.SourceStoragePoolSelector,
-			StorageClassRef:     corev1.LocalObjectReference{Name: storageClass.Name},
-			Resources:           parentVolume.Spec.Resources,
-		},
-	}
-	log.V(1).Info("Applying volume", "Volume", volume.Name)
-	if err := r.Patch(ctx, volume, client.Apply, volumeFieldOwner); err != nil {
-		base := parentVolume.DeepCopy()
-		conditionutils.MustUpdateSlice(&parentVolume.Status.Conditions, string(storagev1alpha1.VolumeSynced),
-			conditionutils.UpdateStatus(corev1.ConditionFalse),
-			conditionutils.UpdateReason("ApplyFailed"),
-			conditionutils.UpdateMessage(fmt.Sprintf("Could not apply the volume: %v", err)),
-			conditionutils.UpdateObserved(parentVolume),
-		)
-		if err := r.ParentClient.Status().Patch(ctx, parentVolume, client.MergeFrom(base)); err != nil {
-			log.Error(err, "Could not update parent status")
-		}
-		return ctrl.Result{}, fmt.Errorf("error applying volume: %w", err)
-	}
-
-	log.V(1).Info("Updating parent volume status")
-	baseParentVolume := parentVolume.DeepCopy()
-	parentVolume.Status.State = volume.Status.State
-	conditionutils.MustUpdateSlice(&parentVolume.Status.Conditions, string(storagev1alpha1.VolumeSynced),
-		conditionutils.UpdateStatus(corev1.ConditionTrue),
-		conditionutils.UpdateReason("Applied"),
-		conditionutils.UpdateMessage("Successfully applied volume"),
-		conditionutils.UpdateObserved(parentVolume),
-	)
-	if err := r.ParentClient.Status().Patch(ctx, parentVolume, client.MergeFrom(baseParentVolume)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("could not update parent status: %w", err)
-	}
-	log.Info("Successfully synced volume")
-	return ctrl.Result{}, nil
+	return true, nil
 }
+
+const (
+	volumeSpecStoragePoolNameField = ".spec.storagePool.name"
+	volumeSpecClaimRefNameField    = ".spec.claimRef.name"
+)
 
 func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	log := ctrl.Log.WithName("volume-reconciler")
 	ctx := ctrl.LoggerInto(context.Background(), log)
 
-	if err := r.ParentFieldIndexer.IndexField(ctx, &storagev1alpha1.Volume{}, volumeStoragePoolField, func(obj client.Object) []string {
-		volume := obj.(*storagev1alpha1.Volume)
-		return []string{volume.Spec.StoragePool.Name}
-	}); err != nil {
-		return fmt.Errorf("error setting up %s indexer: %w", volumeStoragePoolField, err)
+	if r.StoragePoolName != "" {
+		if err := r.ParentFieldIndexer.IndexField(ctx, &storagev1alpha1.Volume{}, volumeSpecStoragePoolNameField, func(obj client.Object) []string {
+			volume := obj.(*storagev1alpha1.Volume)
+			return []string{volume.Spec.StoragePool.Name}
+		}); err != nil {
+			return fmt.Errorf("error setting up %s indexer: %w", volumeSpecStoragePoolNameField, err)
+		}
+	}
+
+	if r.MachinePoolName != "" {
+		if err := r.SharedParentFieldIndexer.IndexField(ctx, &computev1alpha1.Machine{}, shared.MachineSpecVolumeAttachmentsVolumeClaimRefNameField); err != nil {
+			return err
+		}
+
+		if err := r.ParentFieldIndexer.IndexField(ctx, &storagev1alpha1.Volume{}, volumeSpecClaimRefNameField, func(object client.Object) []string {
+			volume := object.(*storagev1alpha1.Volume)
+			return []string{volume.Spec.ClaimRef.Name}
+		}); err != nil {
+			return err
+		}
 	}
 
 	c, err := controller.New("volume", mgr, controller.Options{
@@ -224,40 +382,105 @@ func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		source.NewKindWithCache(&storagev1alpha1.Volume{}, r.ParentCache),
 		&handler.EnqueueRequestForObject{},
 		predicate.NewPredicateFuncs(func(obj client.Object) bool {
-			volume := obj.(*storagev1alpha1.Volume)
-			return volume.Spec.StoragePool.Name == r.StoragePoolName
+			parent := obj.(*storagev1alpha1.Volume)
+
+			key, err := r.NamesStrategy.Key(ctx, client.ObjectKeyFromObject(parent), parent)
+			if err != nil {
+				log.Error(err, "Error constructing target key")
+				return false
+			}
+
+			err = r.Get(ctx, key, &storagev1alpha1.Volume{})
+			if err != nil && !apierrors.IsNotFound(err) {
+				log.Error(err, "Error getting target object")
+				return false
+			}
+			if err == nil {
+				log.V(1).Info("Target object exists, reconciliation required.")
+				return true
+			}
+
+			used, err := r.isParentUsed(ctx, log, parent)
+			if err != nil {
+				log.Error(err, "Error determining whether parent is used")
+				return false
+			}
+
+			log.V(1).Info("Used", "Used", used)
+			return used
 		}),
 	); err != nil {
 		return fmt.Errorf("error setting up parent volume watch: %w", err)
 	}
 
-	if err := c.Watch(
-		source.NewKindWithCache(&storagev1alpha1.StoragePool{}, r.ParentCache),
-		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
-			storagePool := obj.(*storagev1alpha1.StoragePool)
-			list := &storagev1alpha1.VolumeList{}
-			if err := r.ParentClient.List(ctx, list, client.MatchingFields{volumeStoragePoolField: storagePool.Name}); err != nil {
-				log.Error(err, "Error listing parent storage pools")
-				return nil
-			}
-			res := make([]reconcile.Request, 0, len(list.Items))
-			for _, item := range list.Items {
-				res = append(res, reconcile.Request{
-					NamespacedName: client.ObjectKeyFromObject(&item),
-				})
-			}
-			return res
-		}),
-		&predicate.GenerationChangedPredicate{},
-	); err != nil {
-		return fmt.Errorf("error setting up parent storage pool watch: %w", err)
+	if r.StoragePoolName != "" {
+		if err := c.Watch(
+			source.NewKindWithCache(&storagev1alpha1.StoragePool{}, r.ParentCache),
+			handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+				storagePool := obj.(*storagev1alpha1.StoragePool)
+				list := &storagev1alpha1.VolumeList{}
+				if err := r.ParentClient.List(ctx, list, client.MatchingFields{volumeSpecStoragePoolNameField: storagePool.Name}); err != nil {
+					log.Error(err, "Error listing parent storage pools")
+					return nil
+				}
+				res := make([]reconcile.Request, 0, len(list.Items))
+				for _, item := range list.Items {
+					res = append(res, reconcile.Request{
+						NamespacedName: client.ObjectKeyFromObject(&item),
+					})
+				}
+				return res
+			}),
+			&predicate.GenerationChangedPredicate{},
+		); err != nil {
+			return fmt.Errorf("error setting up parent storage pool watch: %w", err)
+		}
+	}
+
+	if r.MachinePoolName != "" {
+		if err := c.Watch(
+			source.NewKindWithCache(&computev1alpha1.Machine{}, r.ParentCache),
+			handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+				machine := obj.(*computev1alpha1.Machine)
+				if machine.Spec.MachinePool.Name != r.MachinePoolName {
+					return nil
+				}
+
+				keys := make(map[client.ObjectKey]struct{})
+				for _, attachment := range machine.Spec.VolumeAttachments {
+					if volumeClaim := attachment.VolumeClaim; volumeClaim != nil {
+						volumeList := &storagev1alpha1.VolumeList{}
+						if err := r.ParentClient.List(ctx, volumeList,
+							client.InNamespace(machine.Namespace),
+							client.MatchingFields{
+								volumeSpecClaimRefNameField: attachment.VolumeClaim.Ref.Name,
+							},
+						); err != nil {
+							log.Error(err, "Error listing volumes for claim", "Claim", attachment.VolumeClaim.Ref.Name)
+							return nil
+						}
+
+						for _, volume := range volumeList.Items {
+							keys[client.ObjectKeyFromObject(&volume)] = struct{}{}
+						}
+					}
+				}
+
+				res := make([]reconcile.Request, 0, len(keys))
+				for key := range keys {
+					res = append(res, reconcile.Request{NamespacedName: key})
+				}
+				return res
+			}),
+		); err != nil {
+			return fmt.Errorf("error setting up parent machine watch: %w", err)
+		}
 	}
 
 	if err := c.Watch(
 		&source.Kind{Type: &storagev1alpha1.Volume{}},
-		&partitionlethandler.EnqueueRequestForParentObject{
-			ParentNamespaceAnnotation: partitionletstoragev1alpha1.VolumeParentNamespaceAnnotation,
-			ParentNameAnnotation:      partitionletstoragev1alpha1.VolumeParentNameAnnotation,
+		&partitionlethandler.EnqueueRequestForParentController{
+			OwnerType: &storagev1alpha1.Volume{},
 		},
 	); err != nil {
 		return fmt.Errorf("error setting up volume watch: %w", err)
