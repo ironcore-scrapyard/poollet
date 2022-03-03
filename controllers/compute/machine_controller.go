@@ -91,7 +91,7 @@ func (r *MachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 }
 
 func (r *MachineReconciler) reconcileExists(ctx context.Context, log logr.Logger, parentMachine *computev1alpha1.Machine) (ctrl.Result, error) {
-	machineKey, err := r.NamesStrategy.Key(ctx, client.ObjectKeyFromObject(parentMachine), parentMachine)
+	machineKey, err := r.NamesStrategy.Key(parentMachine)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("error determining machine key: %w", err)
 	}
@@ -335,8 +335,15 @@ func (r *MachineReconciler) createOrUseAndPatchVolumeClaim(
 	volumeClaimObjects []client.Object,
 	parentAttachment computev1alpha1.VolumeAttachment,
 ) (*storagev1alpha1.VolumeClaim, []client.Object, error) {
-	log.V(1).Info("Determining target volume key")
-	volumeKey, err := r.NamesStrategy.Key(ctx, client.ObjectKey{Namespace: parentMachine.Namespace, Name: parentVolumeClaim.Spec.VolumeRef.Name}, &storagev1alpha1.Volume{})
+	parentVolume := &storagev1alpha1.Volume{}
+	parentVolumeKey := client.ObjectKey{Namespace: parentMachine.Namespace, Name: parentVolumeClaim.Spec.VolumeRef.Name}
+	log.V(1).Info("Getting target parent volume", "ParentVolumeKey", parentVolumeKey)
+	if err := r.ParentClient.Get(ctx, parentVolumeKey, parentVolume); err != nil {
+		return nil, nil, fmt.Errorf("error getting parent volume %s: %w", parentVolumeKey, err)
+	}
+
+	log.V(1).Info("Determining target volume key from parent volume", "ParentVolumeKey", parentVolumeKey)
+	volumeKey, err := r.NamesStrategy.Key(parentVolume)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error determining target volume key for parent volume claim %s volume name %s: %w",
 			parentVolumeClaimKey,

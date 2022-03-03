@@ -91,6 +91,7 @@ func main() {
 	var parentKubeconfig string
 
 	var namespace string
+	var useGrandparentControllerKey bool
 
 	var machinePoolName string
 	var machinePoolProviderID string
@@ -116,6 +117,8 @@ func main() {
 	flag.StringVar(&parentKubeconfig, "parent-kubeconfig", "", "Path pointing to a parent kubeconfig.")
 
 	flag.StringVar(&namespace, "namespace", corev1.NamespaceDefault, "Namespace to sync machines to.")
+	flag.BoolVar(&useGrandparentControllerKey, "use-grandparent-controller-key", false, "Whether to use the parent's parent controller (thus grandparent "+
+		"controller key) to determine the target key of the object. Useful to redirect to an actual controller in another cluster.")
 
 	flag.StringVar(&machinePoolName, "machine-pool-name", hostName, "MachinePool to announce in the parent cluster.")
 	flag.StringVar(&machinePoolProviderID, "machine-pool-provider-id", "", "Provider ID (usually <provider-type>://<id>) of the announced MachinePool.")
@@ -166,8 +169,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	namesStrategy := &names.FixedNamespaceNamespacedNameStrategy{
+	namesStrategy := names.Strategy(&names.FixedNamespaceNamespacedNameStrategy{
 		Namespace: namespace,
+	})
+	if useGrandparentControllerKey {
+		namesStrategy = names.GrandparentControllerStrategy{Fallback: namesStrategy}
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{

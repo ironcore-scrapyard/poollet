@@ -15,9 +15,9 @@
 package names
 
 import (
-	"context"
 	"fmt"
 
+	partitionletmeta "github.com/onmetal/partitionlet/meta"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -25,7 +25,7 @@ import (
 // Strategy is a strategy to obtain keys for syncing parent objects to the cluster.
 type Strategy interface {
 	// Key returns the key for the synced object by giving the parent key and type.
-	Key(ctx context.Context, parentKey client.ObjectKey, parentType client.Object) (client.ObjectKey, error)
+	Key(parentObject client.Object) (client.ObjectKey, error)
 }
 
 // FixedNamespaceNamespacedNameStrategy is a strategy to obtain the key by setting the name of the
@@ -35,11 +35,31 @@ type FixedNamespaceNamespacedNameStrategy struct {
 }
 
 // Key implements Strategy.
-func (n FixedNamespaceNamespacedNameStrategy) Key(ctx context.Context, parentKey client.ObjectKey, parentObj client.Object) (client.ObjectKey, error) {
+func (n FixedNamespaceNamespacedNameStrategy) Key(parentObject client.Object) (client.ObjectKey, error) {
 	return client.ObjectKey{
 		Namespace: n.Namespace,
-		Name:      fmt.Sprintf("%s--%s", parentKey.Namespace, parentKey.Name),
+		Name:      fmt.Sprintf("%s--%s", parentObject.GetNamespace(), parentObject.GetName()),
 	}, nil
+}
+
+// GrandparentControllerStrategy is a strategy that determines the target key by using the parent controller
+// of the parent object, thus the 'grandparent' object's key will be used.
+// If the object does not have a controller, the Fallback is used, if any is supplied. Otherwise, an error
+// is thrown.
+type GrandparentControllerStrategy struct {
+	Fallback Strategy
+}
+
+// Key implements Strategy.
+func (s GrandparentControllerStrategy) Key(parentObject client.Object) (client.ObjectKey, error) {
+	controller := partitionletmeta.GetParentControllerOf(parentObject)
+	if controller == nil {
+		if s.Fallback != nil {
+			return s.Fallback.Key(parentObject)
+		}
+		return client.ObjectKey{}, fmt.Errorf("could not determine source parent controller of %v", parentObject)
+	}
+	return client.ObjectKey{Namespace: controller.Namespace, Name: controller.Name}, nil
 }
 
 func Must(key client.ObjectKey, err error) client.ObjectKey {

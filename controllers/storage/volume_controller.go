@@ -87,7 +87,7 @@ func (r *VolumeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 }
 
 func (r *VolumeReconciler) reconcileExists(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume) (ctrl.Result, error) {
-	volumeKey, err := r.NamesStrategy.Key(ctx, client.ObjectKeyFromObject(parentVolume), parentVolume)
+	volumeKey, err := r.NamesStrategy.Key(parentVolume)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("error determining volume key: %w", err)
 	}
@@ -512,7 +512,7 @@ func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		predicate.NewPredicateFuncs(func(obj client.Object) bool {
 			parentVolume := obj.(*storagev1alpha1.Volume)
 
-			key, err := r.NamesStrategy.Key(ctx, client.ObjectKeyFromObject(parentVolume), parentVolume)
+			key, err := r.NamesStrategy.Key(parentVolume)
 			if err != nil {
 				log.Error(err, "Error constructing target key")
 				return false

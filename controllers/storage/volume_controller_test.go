@@ -62,7 +62,7 @@ var _ = Describe("VolumeController", func() {
 		Expect(k8sClient.Create(ctx, parentVolume)).To(Succeed())
 
 		By("asserting it is not synced")
-		volumeKey := names.Must(namesStrategy.Key(ctx, client.ObjectKeyFromObject(parentVolume), parentVolume))
+		volumeKey := names.Must(namesStrategy.Key(parentVolume))
 		volume := &storagev1alpha1.Volume{}
 		Consistently(func(g Gomega) {
 			err := k8sClient.Get(ctx, volumeKey, volume)
@@ -166,7 +166,7 @@ var _ = Describe("VolumeController", func() {
 		Expect(k8sClient.Create(ctx, parentVolume)).To(Succeed())
 
 		By("asserting it is not synced")
-		volumeKey := names.Must(namesStrategy.Key(ctx, client.ObjectKeyFromObject(parentVolume), parentVolume))
+		volumeKey := names.Must(namesStrategy.Key(parentVolume))
 		volume := &storagev1alpha1.Volume{}
 		Consistently(func(g Gomega) {
 			g.Expect(k8sClient.Get(ctx, volumeKey, volume)).To(MatchErrorFunc(apierrors.IsNotFound))
