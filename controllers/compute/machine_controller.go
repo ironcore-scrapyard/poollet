@@ -78,6 +78,7 @@ type MachineReconciler struct {
 //+kubebuilder:rbac:groups=compute.onmetal.de,resources=machines/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=compute.onmetal.de,resources=machines/finalizers,verbs=update;patch
 //+kubebuilder:rbac:groups=compute.onmetal.de,resources=machineclasses,verbs=get;list;watch
+//+kubebuilder:rbac:groups=storage.onmetal.de,resources=volumeclaims,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 func (r *MachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

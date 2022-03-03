@@ -76,6 +76,7 @@ type VolumeReconciler struct {
 //+kubebuilder:rbac:groups=storage.onmetal.de,resources=volumes/finalizers,verbs=update;patch
 //+kubebuilder:rbac:groups=storage.onmetal.de,resources=storagepools,verbs=get;list;watch
 //+kubebuilder:rbac:groups=storage.onmetal.de,resources=storageclasses,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *VolumeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
