@@ -26,6 +26,7 @@ import (
 	"github.com/onmetal/partitionlet/names"
 	flag "github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apiserver/pkg/server/egressselector"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
@@ -88,6 +89,8 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 
+	var egressSelectorFile string
+
 	var parentKubeconfig string
 
 	var namespace string
@@ -113,6 +116,8 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+
+	flag.StringVar(&egressSelectorFile, "egress-selector", "", "Value supplying egress selector configuration.")
 
 	flag.StringVar(&parentKubeconfig, "parent-kubeconfig", "", "Path pointing to a parent kubeconfig.")
 
@@ -148,6 +153,21 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	var egressSelector *egressselector.EgressSelector
+	if egressSelectorFile != "" {
+		egressSelectorCfg, err := egressselector.ReadEgressSelectorConfiguration(egressSelectorFile)
+		if err != nil {
+			setupLog.Error(err, "Could not read egress selector configuration")
+			os.Exit(1)
+		}
+
+		egressSelector, err = egressselector.NewEgressSelector(egressSelectorCfg)
+		if err != nil {
+			setupLog.Error(err, "Could not create egress selector")
+			os.Exit(1)
+		}
+	}
+
 	if machinePoolName == "" {
 		err := fmt.Errorf("machine pool name needs to be set")
 		setupLog.Error(err, "Machine pool name is not defined")
@@ -165,8 +185,21 @@ func main() {
 	}
 	parentCfg, err := LoadRESTConfig(parentKubeconfig)
 	if err != nil {
-		setupLog.Error(err, "unable to load target kubeconfig")
+		setupLog.Error(err, "unable to load parent kubeconfig")
 		os.Exit(1)
+	}
+
+	if egressSelector != nil {
+		dialFunc, err := egressSelector.Lookup(egressselector.NetworkContext{
+			EgressSelectionName: egressselector.Cluster,
+		})
+		if err != nil {
+			setupLog.Error(err, "Error getting egress selector for parent")
+			os.Exit(1)
+		}
+		if dialFunc != nil {
+			parentCfg.Dial = dialFunc
+		}
 	}
 
 	namesStrategy := names.Strategy(&names.FixedNamespaceNamespacedNameStrategy{
@@ -176,7 +209,26 @@ func main() {
 		namesStrategy = names.GrandparentControllerStrategy{Fallback: namesStrategy}
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	cfg, err := ctrl.GetConfig()
+	if err != nil {
+		setupLog.Error(err, "unable to load kubeconfig")
+		os.Exit(1)
+	}
+
+	if egressSelector != nil {
+		dialFunc, err := egressSelector.Lookup(egressselector.NetworkContext{
+			EgressSelectionName: egressselector.ControlPlane,
+		})
+		if err != nil {
+			setupLog.Error(err, "Error getting egress selector for cluster")
+			os.Exit(1)
+		}
+		if dialFunc != nil {
+			cfg.Dial = dialFunc
+		}
+	}
+
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
 		Port:                   9443,
