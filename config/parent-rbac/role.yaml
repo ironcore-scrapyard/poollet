@@ -65,6 +65,14 @@ rules:
       - patch
       - update
   - apiGroups:
+      - compute.onmetal.de
+    resources:
+      - machinepools/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
       - storage.onmetal.de
     resources:
       - volumes
@@ -117,5 +125,13 @@ rules:
       - list
       - watch
       - create
+      - patch
+      - update
+  - apiGroups:
+      - storage.onmetal.de
+    resources:
+      - storagepools/status
+    verbs:
+      - get
       - patch
       - update
