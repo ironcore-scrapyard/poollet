@@ -1,0 +1,121 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - update
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - update
+      - patch
+  - apiGroups:
+      - compute.onmetal.de
+    resources:
+      - machines
+    verbs:
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - compute.onmetal.de
+    resources:
+      - machines/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - compute.onmetal.de
+    resources:
+      - machineclasses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - compute.onmetal.de
+    resources:
+      - machinepool
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - patch
+      - update
+  - apiGroups:
+      - storage.onmetal.de
+    resources:
+      - volumes
+    verbs:
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - storage.onmetal.de
+    resources:
+      - volumes/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - storage.onmetal.de
+    resources:
+      - storageclasses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - storage.onmetal.de
+    resources:
+      - volumeclaims
+    verbs:
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - storage.onmetal.de
+    resources:
+      - volumeclaims/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - storage.onmetal.de
+    resources:
+      - storagepool
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - patch
+      - update

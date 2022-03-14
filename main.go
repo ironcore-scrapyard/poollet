@@ -160,12 +160,12 @@ func main() {
 		}
 	}
 
-	if controllers.Enabled(machinePoolController) && machinePoolName == "" {
+	if (controllers.Enabled(machinePoolController) || controllers.Enabled(machineController)) && machinePoolName == "" {
 		err := fmt.Errorf("machine pool name needs to be set")
 		setupLog.Error(err, "Machine pool name is not defined")
 		os.Exit(1)
 	}
-	if controllers.Enabled(storagePoolController) && storagePoolName == "" {
+	if (controllers.Enabled(storagePoolController) || controllers.Enabled(volumeController)) && storagePoolName == "" {
 		err := fmt.Errorf("storage pool name needs to be set")
 		setupLog.Error(err, "Storage pool name is not defined")
 		os.Exit(1)
