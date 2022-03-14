@@ -56,7 +56,7 @@ rules:
   - apiGroups:
       - compute.onmetal.de
     resources:
-      - machinepool
+      - machinepools
     verbs:
       - get
       - list
@@ -111,7 +111,7 @@ rules:
   - apiGroups:
       - storage.onmetal.de
     resources:
-      - storagepool
+      - storagepools
     verbs:
       - get
       - list
