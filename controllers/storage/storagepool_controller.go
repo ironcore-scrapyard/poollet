@@ -26,7 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -60,22 +59,62 @@ func (r *StoragePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	return r.reconcileExists(ctx, log, storagePool)
 }
 
-func (r *StoragePoolReconciler) reconcileExists(ctx context.Context, log logr.Logger, pool *storagev1alpha1.StoragePool) (ctrl.Result, error) {
-	if !pool.DeletionTimestamp.IsZero() {
-		return r.delete(ctx, log, pool)
+func (r *StoragePoolReconciler) reconcileExists(ctx context.Context, log logr.Logger, parentStoragePool *storagev1alpha1.StoragePool) (ctrl.Result, error) {
+	if !parentStoragePool.DeletionTimestamp.IsZero() {
+		return r.delete(ctx, log, parentStoragePool)
 	}
-	return r.reconcile(ctx, log, pool)
+	return r.reconcile(ctx, log, parentStoragePool)
 }
 
-func (r *StoragePoolReconciler) delete(ctx context.Context, log logr.Logger, pool *storagev1alpha1.StoragePool) (ctrl.Result, error) {
+func (r *StoragePoolReconciler) delete(ctx context.Context, log logr.Logger, parentStoragePool *storagev1alpha1.StoragePool) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-func (r *StoragePoolReconciler) reconcile(ctx context.Context, log logr.Logger, pool *storagev1alpha1.StoragePool) (ctrl.Result, error) {
-	log.Info("Reconciling pool")
+func (r *StoragePoolReconciler) patchParentStoragePoolStatus(
+	ctx context.Context,
+	parentStoragePool *storagev1alpha1.StoragePool,
+	state storagev1alpha1.StoragePoolState,
+	availableStorageClasses []corev1.LocalObjectReference,
+) error {
+	base := parentStoragePool.DeepCopy()
+	parentStoragePool.Status.State = state
+	parentStoragePool.Status.AvailableStorageClasses = availableStorageClasses
+	return r.ParentClient.Status().Patch(ctx, parentStoragePool, client.MergeFrom(base))
+}
+
+func (r *StoragePoolReconciler) patchParentStoragePoolStatusLogOnError(
+	ctx context.Context,
+	log logr.Logger,
+	parentStoragePool *storagev1alpha1.StoragePool,
+	state storagev1alpha1.StoragePoolState,
+	availableStorageClasses []corev1.LocalObjectReference,
+) {
+	if err := r.patchParentStoragePoolStatus(ctx, parentStoragePool, state, availableStorageClasses); err != nil {
+		log.Error(err, "Error patching parent storage pool status")
+	}
+}
+
+func (r *StoragePoolReconciler) reconcile(ctx context.Context, log logr.Logger, parentStoragePool *storagev1alpha1.StoragePool) (ctrl.Result, error) {
+	log.V(1).Info("Reconciling parent storage pool")
+	availableStorageClasses, err := r.gatherAvailableStorageClasses(ctx)
+	if err != nil {
+		r.patchParentStoragePoolStatusLogOnError(ctx, log, parentStoragePool, parentStoragePool.Status.State, parentStoragePool.Status.AvailableStorageClasses)
+		return ctrl.Result{}, fmt.Errorf("error gathering available storage classes: %w", err)
+	}
+
+	log.V(1).Info("Patching parent storage pool status")
+	if err := r.patchParentStoragePoolStatus(ctx, parentStoragePool, storagev1alpha1.StoragePoolStateAvailable, availableStorageClasses); err != nil {
+		return ctrl.Result{}, fmt.Errorf("error patching parent storage pool status: %w", err)
+	}
+
+	log.Info("Successfully synced pool")
+	return ctrl.Result{}, nil
+}
+
+func (r *StoragePoolReconciler) gatherAvailableStorageClasses(ctx context.Context) ([]corev1.LocalObjectReference, error) {
 	sourcePoolList := &storagev1alpha1.StoragePoolList{}
 	if err := r.List(ctx, sourcePoolList, client.MatchingLabels(r.SourceStoragePoolSelector)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("could not list source pools: %w", err)
+		return nil, fmt.Errorf("could not list source pools: %w", err)
 	}
 
 	availableClassSet := map[corev1.LocalObjectReference]struct{}{}
@@ -89,18 +128,10 @@ func (r *StoragePoolReconciler) reconcile(ctx context.Context, log logr.Logger, 
 	for availableClass := range availableClassSet {
 		availableClasses = append(availableClasses, availableClass)
 	}
-
-	base := pool.DeepCopy()
-	pool.Status.AvailableStorageClasses = availableClasses
-	log.Info("Updating available classes")
-	if err := r.ParentClient.Status().Patch(ctx, pool, client.MergeFrom(base)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("error updating storage classes: %w", err)
-	}
-	log.Info("Successfully synced pool")
-	return ctrl.Result{}, nil
+	return availableClasses, nil
 }
 
-func (r *StoragePoolReconciler) birthCry(ctx context.Context) error {
+func (r *StoragePoolReconciler) birthCry(ctx context.Context, log logr.Logger) error {
 	storagePool := &storagev1alpha1.StoragePool{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: storagev1alpha1.GroupVersion.String(),
@@ -115,7 +146,7 @@ func (r *StoragePoolReconciler) birthCry(ctx context.Context) error {
 			ProviderID: r.ProviderID,
 		},
 	}
-	log.Log.Info("Announcing StoragePool to parent cluster", "StoragePool", r.StoragePoolName, "ProviderID", r.ProviderID)
+	log.V(1).Info("Announcing StoragePool to parent cluster", "StoragePool", r.StoragePoolName, "ProviderID", r.ProviderID)
 	if err := r.ParentClient.Patch(ctx, storagePool, client.Apply, storagePoolFieldOwner); err != nil {
 		return fmt.Errorf("error appylying storagepool in parent cluster: %w", err)
 	}
@@ -124,6 +155,7 @@ func (r *StoragePoolReconciler) birthCry(ctx context.Context) error {
 
 func (r *StoragePoolReconciler) SetupWithManager(mgr manager.Manager) error {
 	ctx := context.Background()
+	log := ctrl.Log.WithName("storagepool").WithName("setup")
 
 	var sourcePoolPredicates []predicate.Predicate
 	if r.SourceStoragePoolSelector != nil {
@@ -135,7 +167,7 @@ func (r *StoragePoolReconciler) SetupWithManager(mgr manager.Manager) error {
 		sourcePoolPredicates = append(sourcePoolPredicates, prct)
 	}
 
-	if err := r.birthCry(ctx); err != nil {
+	if err := r.birthCry(ctx, log); err != nil {
 		return fmt.Errorf("error initializing storage pool: %w", err)
 	}
 
