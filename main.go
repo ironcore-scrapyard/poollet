@@ -22,13 +22,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/onmetal/controller-utils/configutils"
 	"github.com/onmetal/partitionlet/controllers/shared"
 	"github.com/onmetal/partitionlet/names"
 	flag "github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiserver/pkg/server/egressselector"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -55,7 +54,9 @@ var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 	hostName string
+)
 
+const (
 	machineController     = "machine"
 	volumeController      = "volume"
 	machinePoolController = "machinepool"
@@ -72,15 +73,6 @@ func init() {
 	utilruntime.Must(networkv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(storagev1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
-}
-
-func LoadRESTConfig(kubeconfig string) (*rest.Config, error) {
-	data, err := os.ReadFile(kubeconfig)
-	if err != nil {
-		return nil, fmt.Errorf("could not read kubeconfig %s: %w", kubeconfig, err)
-	}
-
-	return clientcmd.RESTConfigFromKubeConfig(data)
 }
 
 func main() {
@@ -168,22 +160,18 @@ func main() {
 		}
 	}
 
-	if machinePoolName == "" {
+	if controllers.Enabled(machinePoolController) && machinePoolName == "" {
 		err := fmt.Errorf("machine pool name needs to be set")
 		setupLog.Error(err, "Machine pool name is not defined")
 		os.Exit(1)
 	}
-	if storagePoolName == "" {
+	if controllers.Enabled(storagePoolController) && storagePoolName == "" {
 		err := fmt.Errorf("storage pool name needs to be set")
 		setupLog.Error(err, "Storage pool name is not defined")
 		os.Exit(1)
 	}
-	if storagePoolName == "" {
-		err := fmt.Errorf("storage pool name needs to be set")
-		setupLog.Error(err, "storage pool name is not defined")
-		os.Exit(1)
-	}
-	parentCfg, err := LoadRESTConfig(parentKubeconfig)
+
+	parentCfg, err := configutils.GetConfig(configutils.Kubeconfig(parentKubeconfig))
 	if err != nil {
 		setupLog.Error(err, "unable to load parent kubeconfig")
 		os.Exit(1)
@@ -209,7 +197,7 @@ func main() {
 		namesStrategy = names.GrandparentControllerStrategy{Fallback: namesStrategy}
 	}
 
-	cfg, err := ctrl.GetConfig()
+	cfg, err := configutils.GetConfig()
 	if err != nil {
 		setupLog.Error(err, "unable to load kubeconfig")
 		os.Exit(1)

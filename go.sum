@@ -387,6 +387,10 @@ github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn
 github.com/onmetal/controller-utils v0.3.2/go.mod h1:zCNJfEgn//oE02LUC4KTHsibltp7D7M0H1MAWXj/8k4=
 github.com/onmetal/controller-utils v0.5.0 h1:7G7k77MipWihhglYL/eUNvN7DR6cabkKa1eb1jWUtwM=
 github.com/onmetal/controller-utils v0.5.0/go.mod h1:HE6K6mWXBOBI/HTCI/xT7nHWRJf+AWn0BmicQbtUfHg=
+github.com/onmetal/controller-utils v0.5.1 h1:HlMK2i387+jZCGbgG5/nFpuZskcrhwbHsJfotOOfrJs=
+github.com/onmetal/controller-utils v0.5.1/go.mod h1:snBJX1GjHkxJOegbsqrDhXq3q+Eh6xc88zTRKCpT7zw=
+github.com/onmetal/controller-utils v0.5.2 h1:e6Mag5EMqUNCBLzyDZikunT/CdzjIl2+slf3/HuHhw8=
+github.com/onmetal/controller-utils v0.5.2/go.mod h1:2WG5YlYYKnlR0mwXWFw5TceJ4wvuIAeOC/HKeiGNIrc=
 github.com/onmetal/onmetal-api v0.0.10-0.20220225150941-019bd2a8ccb6 h1:nsaZ99s3JXvbFf9IDAFkPq4SN6HS2VG0WvGP4Zaf4n4=
 github.com/onmetal/onmetal-api v0.0.10-0.20220225150941-019bd2a8ccb6/go.mod h1:jl4+nnDCKFW7L7U82vUqGNSQrCeuTDu0QHYLetuOcz0=
 github.com/onsi/ginkgo v0.0.0-20170829012221-11459a886d9c/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
