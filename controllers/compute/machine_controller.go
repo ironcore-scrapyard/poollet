@@ -236,9 +236,11 @@ func (r *MachineReconciler) applyMachine(
 		machine.Spec.Image = parentMachine.Spec.Image
 		machine.Spec.Interfaces = parentMachine.Spec.Interfaces
 		machine.Spec.MachinePoolSelector = r.SourceMachinePoolSelector
-		machine.Spec.MachinePool = corev1.LocalObjectReference{Name: r.SourceMachinePoolName}
 		machine.Spec.Ignition = ignitionRef
 		machine.Spec.VolumeAttachments = attachments
+		if machine.Spec.MachinePool.Name == "" {
+			machine.Spec.MachinePool = corev1.LocalObjectReference{Name: r.SourceMachinePoolName}
+		}
 		return partitionletmeta.SetParentControllerReference(parentMachine, machine, r.Scheme)
 	}); err != nil {
 		return nil, fmt.Errorf("error applying machine: %w", err)

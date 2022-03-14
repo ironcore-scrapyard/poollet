@@ -308,10 +308,12 @@ func (r *VolumeReconciler) applyVolume(ctx context.Context, log logr.Logger, par
 		// TODO: Translate tolerations
 		volume.Spec.StorageClassRef = parentVolume.Spec.StorageClassRef
 		volume.Spec.StoragePoolSelector = r.SourceStoragePoolSelector
-		volume.Spec.StoragePool = corev1.LocalObjectReference{
-			Name: r.SourceStoragePoolName,
-		}
 		volume.Spec.Resources = parentVolume.Spec.Resources
+		if volume.Spec.StoragePool.Name == "" {
+			volume.Spec.StoragePool = corev1.LocalObjectReference{
+				Name: r.SourceStoragePoolName,
+			}
+		}
 		return partitionletmeta.SetParentControllerReference(parentVolume, volume, r.Scheme)
 	}); err != nil {
 		return nil, fmt.Errorf("error applying volume %s: %w", volumeKey, err)
