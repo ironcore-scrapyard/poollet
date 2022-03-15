@@ -206,9 +206,7 @@ func (r *VolumeReconciler) patchParentStatus(
 	parentVolume *storagev1alpha1.Volume,
 	parentAccess *storagev1alpha1.VolumeAccess,
 	state storagev1alpha1.VolumeState,
-	phase storagev1alpha1.VolumePhase,
-	syncStatus corev1.ConditionStatus,
-	syncReason, syncMessage string,
+	syncCondition storagev1alpha1.VolumeCondition,
 ) error {
 	if r.StoragePoolName == "" || parentVolume.Spec.StoragePool.Name != r.StoragePoolName {
 		return nil
@@ -216,11 +214,10 @@ func (r *VolumeReconciler) patchParentStatus(
 	baseParent := parentVolume.DeepCopy()
 	parentVolume.Status.Access = parentAccess
 	parentVolume.Status.State = state
-	parentVolume.Status.Phase = phase
 	conditionutils.MustUpdateSlice(&parentVolume.Status.Conditions, string(storagev1alpha1.VolumeSynced),
-		conditionutils.UpdateStatus(syncStatus),
-		conditionutils.UpdateReason(syncReason),
-		conditionutils.UpdateMessage(syncMessage),
+		conditionutils.UpdateStatus(syncCondition.Status),
+		conditionutils.UpdateReason(syncCondition.Reason),
+		conditionutils.UpdateMessage(syncCondition.Message),
 		conditionutils.UpdateObserved(parentVolume),
 	)
 	if err := r.ParentClient.Status().Patch(ctx, parentVolume, client.MergeFrom(baseParent)); err != nil {
@@ -260,10 +257,11 @@ func (r *VolumeReconciler) patchParentStatusSuccessfulSync(ctx context.Context, 
 		parentVolume,
 		parentAccess,
 		volume.Status.State,
-		volume.Status.Phase,
-		corev1.ConditionTrue,
-		"Synced",
-		"Successfully synced volume.",
+		storagev1alpha1.VolumeCondition{
+			Status:  corev1.ConditionTrue,
+			Reason:  "Synced",
+			Message: "Successfully synced volume.",
+		},
 	); err != nil {
 		log.Error(err, "Error patching parent status")
 		return ctrl.Result{}, fmt.Errorf("error patching parent status")
@@ -277,10 +275,11 @@ func (r *VolumeReconciler) patchParentStatusApplyIssue(ctx context.Context, log 
 		parentVolume,
 		parentVolume.Status.Access,
 		storagev1alpha1.VolumeStateError,
-		storagev1alpha1.VolumePending,
-		corev1.ConditionFalse,
-		"ApplyFailed",
-		fmt.Sprintf("Applying the volume resulted in an error: %v", err),
+		storagev1alpha1.VolumeCondition{
+			Status:  corev1.ConditionFalse,
+			Reason:  "ApplyFailed",
+			Message: fmt.Sprintf("Applying the volume resulted in an error: %v", err),
+		},
 	); err != nil {
 		log.Error(err, "Error patching parent status")
 	}
@@ -330,10 +329,11 @@ func (r *VolumeReconciler) patchParentStatusStorageClassIssue(ctx context.Contex
 			parentVolume,
 			parentVolume.Status.Access,
 			storagev1alpha1.VolumeStateError,
-			storagev1alpha1.VolumePending,
-			corev1.ConditionFalse,
-			"StorageClassError",
-			fmt.Sprintf("Error validating storage class: %v", err),
+			storagev1alpha1.VolumeCondition{
+				Status:  corev1.ConditionFalse,
+				Reason:  "StorageClassError",
+				Message: fmt.Sprintf("Error validating storage class: %v", err),
+			},
 		); err != nil {
 			log.Error(err, "Error patching parent status")
 		}
@@ -344,10 +344,11 @@ func (r *VolumeReconciler) patchParentStatusStorageClassIssue(ctx context.Contex
 		parentVolume,
 		parentVolume.Status.Access,
 		storagev1alpha1.VolumeStateError,
-		storagev1alpha1.VolumePending,
-		corev1.ConditionFalse,
-		"UnsupportedStorageClass",
-		fmt.Sprintf("Storage class %q is not supported", parentVolume.Spec.StorageClassRef.Name),
+		storagev1alpha1.VolumeCondition{
+			Status:  corev1.ConditionFalse,
+			Message: "UnsupportedStorageClass",
+			Reason:  fmt.Sprintf("Storage class %q is not supported", parentVolume.Spec.StorageClassRef.Name),
+		},
 	); err != nil {
 		return ctrl.Result{}, fmt.Errorf("error patching parent status: %w", err)
 	}
@@ -446,10 +447,11 @@ func (r *VolumeReconciler) patchParentStatusAccessSecretApplyIssue(ctx context.C
 		parentVolume,
 		parentVolume.Status.Access,
 		storagev1alpha1.VolumeStateError,
-		storagev1alpha1.VolumePending,
-		corev1.ConditionFalse,
-		"ErrorApplyingAccessSecret",
-		fmt.Sprintf("Error applying access secret: %v", err),
+		storagev1alpha1.VolumeCondition{
+			Status:  corev1.ConditionFalse,
+			Reason:  "ErrorApplyingAccessSecret",
+			Message: fmt.Sprintf("Error applying access secret: %v", err),
+		},
 	); err != nil {
 		log.Error(err, "Error patching parent status")
 	}
