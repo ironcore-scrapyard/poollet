@@ -134,7 +134,7 @@ func main() {
 	flag.StringToStringVar(&storagePoolAnnotations, "storage-pool-annotations", nil, "Annotations to apply to the storage pool upon startup.")
 
 	controllers := switches.New(
-		machineController, machinePoolController, switches.Disable(storagePoolController), switches.Disable(volumeController),
+		machineController, machinePoolController, volumeController, switches.Disable(storagePoolController),
 	)
 	flag.Var(controllers, "controllers", fmt.Sprintf("Controllers to enable. All controllers: %v. Disabled-by-default controllers: %v", controllers.All(), controllers.DisabledByDefault()))
 
