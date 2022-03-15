@@ -26,9 +26,8 @@ import (
 	partitionletclient "github.com/onmetal/partitionlet/client"
 	"github.com/onmetal/partitionlet/controllers/shared"
 	partitionlethandler "github.com/onmetal/partitionlet/handler"
-	partitionletmeta "github.com/onmetal/partitionlet/meta"
-	"github.com/onmetal/partitionlet/names"
 	partitionletpredicate "github.com/onmetal/partitionlet/predicate"
+	"github.com/onmetal/partitionlet/strategy"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -68,7 +67,8 @@ type MachineReconciler struct {
 	ParentFieldIndexer       client.FieldIndexer
 	SharedParentFieldIndexer *clientutils.SharedFieldIndexer
 
-	NamesStrategy             names.Strategy
+	Strategy strategy.Strategy
+
 	MachinePoolName           string
 	SourceMachinePoolName     string
 	SourceMachinePoolSelector map[string]string
@@ -92,7 +92,7 @@ func (r *MachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 }
 
 func (r *MachineReconciler) reconcileExists(ctx context.Context, log logr.Logger, parentMachine *computev1alpha1.Machine) (ctrl.Result, error) {
-	machineKey, err := r.NamesStrategy.Key(parentMachine)
+	machineKey, err := r.Strategy.Key(parentMachine)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("error determining machine key: %w", err)
 	}
@@ -145,7 +145,7 @@ func (r *MachineReconciler) applyIgnition(ctx context.Context, log logr.Logger, 
 		ignition.Data = map[string]string{
 			ignitionDataKey: parentIgnition.Data[ignitionDataKey],
 		}
-		return partitionletmeta.SetParentControllerReference(parentMachine, ignition, r.Scheme)
+		return r.Strategy.SetParentControllerReference(parentMachine, ignition, r.Scheme)
 	}); err != nil {
 		return nil, fmt.Errorf("error applying ignition: %w", err)
 	}
@@ -241,7 +241,7 @@ func (r *MachineReconciler) applyMachine(
 		if machine.Spec.MachinePool.Name == "" {
 			machine.Spec.MachinePool = corev1.LocalObjectReference{Name: r.SourceMachinePoolName}
 		}
-		return partitionletmeta.SetParentControllerReference(parentMachine, machine, r.Scheme)
+		return r.Strategy.SetParentControllerReference(parentMachine, machine, r.Scheme)
 	}); err != nil {
 		return nil, fmt.Errorf("error applying machine: %w", err)
 	}
@@ -346,7 +346,7 @@ func (r *MachineReconciler) createOrUseAndPatchVolumeClaim(
 	}
 
 	log.V(1).Info("Determining target volume key from parent volume", "ParentVolumeKey", parentVolumeKey)
-	volumeKey, err := r.NamesStrategy.Key(parentVolume)
+	volumeKey, err := r.Strategy.Key(parentVolume)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error determining target volume key for parent volume claim %s volume name %s: %w",
 			parentVolumeClaimKey,
@@ -371,7 +371,7 @@ func (r *MachineReconciler) createOrUseAndPatchVolumeClaim(
 		},
 		Spec: desiredVolumeClaimSpec,
 	}
-	if err := partitionletmeta.SetParentControllerReference(parentMachine, volumeClaim, r.Scheme); err != nil {
+	if err := r.Strategy.SetParentControllerReference(parentMachine, volumeClaim, r.Scheme); err != nil {
 		return nil, nil, fmt.Errorf("error setting parent controller reference: %w", err)
 	}
 	_, newVolumeClaims, err := clientutils.CreateOrUseAndPatch(ctx, r.Client, volumeClaimObjects, volumeClaim,

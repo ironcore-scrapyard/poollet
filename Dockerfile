@@ -17,7 +17,7 @@ ENV GOPRIVATE='github.com/onmetal/*'
 # and so that source changes don't invalidate our downloaded layer
 RUN --mount=type=ssh --mount=type=secret,id=github_pat GITHUB_PAT_PATH=/run/secrets/github_pat ./hack/setup-git-redirect.sh \
   && mkdir -p -m 0600 ~/.ssh \
-  && ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts \
+  && ssh-keyscan github.com >> ~/.ssh/known_hosts \
   && go mod download
 
 # Copy the go source
@@ -26,7 +26,7 @@ COPY client/ client/
 COPY controllers/ controllers/
 COPY handler/ handler/
 COPY meta/ meta/
-COPY names/ names/
+COPY strategy/ strategy/
 COPY predicate/ predicate/
 
 ARG TARGETOS

@@ -19,7 +19,7 @@ import (
 
 	. "github.com/onmetal/controller-utils/testutils"
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
-	"github.com/onmetal/partitionlet/names"
+	"github.com/onmetal/partitionlet/strategy"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
@@ -159,11 +159,11 @@ var _ = Describe("MachineController", func() {
 		Expect(k8sClient.Create(ctx, parentMachine)).To(Succeed())
 
 		By("waiting for the machine & ignition to be synced")
-		machineKey := names.Must(namesStrategy.Key(parentMachine))
+		machineKey := strategy.MustKey(strat.Key(parentMachine))
 		machine := &computev1alpha1.Machine{}
 		ignition := &corev1.ConfigMap{}
 		volumeClaim := &storagev1alpha1.VolumeClaim{}
-		volumeKey := names.Must(namesStrategy.Key(parentVolume))
+		volumeKey := strategy.MustKey(strat.Key(parentVolume))
 		Eventually(func(g Gomega) {
 			err := k8sClient.Get(ctx, machineKey, machine)
 			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())

@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package names
+package strategy
 
 import (
 	"fmt"
 
 	partitionletmeta "github.com/onmetal/partitionlet/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -26,43 +27,63 @@ import (
 type Strategy interface {
 	// Key returns the key for the synced object by giving the parent key and type.
 	Key(parentObject client.Object) (client.ObjectKey, error)
+	// SetParentControllerReference sets the parent controller reference on the given object.
+	SetParentControllerReference(parentObject, object client.Object, scheme *runtime.Scheme) error
 }
 
-// FixedNamespaceNamespacedNameStrategy is a strategy to obtain the key by setting the name of the
+// Simple is a strategy to obtain the key by setting the name of the
 // synced object to <namespace>/<parent-namespace>--<parent-name>.
-type FixedNamespaceNamespacedNameStrategy struct {
+type Simple struct {
 	Namespace string
 }
 
 // Key implements Strategy.
-func (n FixedNamespaceNamespacedNameStrategy) Key(parentObject client.Object) (client.ObjectKey, error) {
+func (s Simple) Key(parentObject client.Object) (client.ObjectKey, error) {
 	return client.ObjectKey{
-		Namespace: n.Namespace,
+		Namespace: s.Namespace,
 		Name:      fmt.Sprintf("%s--%s", parentObject.GetNamespace(), parentObject.GetName()),
 	}, nil
 }
 
-// GrandparentControllerStrategy is a strategy that determines the target key by using the parent controller
+// SetParentControllerReference implements Strategy.
+func (s Simple) SetParentControllerReference(parentObject, object client.Object, scheme *runtime.Scheme) error {
+	return partitionletmeta.SetParentControllerReference(parentObject, object, scheme)
+}
+
+// Grandparent is a strategy that determines the target key by using the parent controller
 // of the parent object, thus the 'grandparent' object's key will be used.
 // If the object does not have a controller, the Fallback is used, if any is supplied. Otherwise, an error
 // is thrown.
-type GrandparentControllerStrategy struct {
+type Grandparent struct {
 	Fallback Strategy
 }
 
 // Key implements Strategy.
-func (s GrandparentControllerStrategy) Key(parentObject client.Object) (client.ObjectKey, error) {
+func (s Grandparent) Key(parentObject client.Object) (client.ObjectKey, error) {
 	controller := partitionletmeta.GetParentControllerOf(parentObject)
 	if controller == nil {
 		if s.Fallback != nil {
 			return s.Fallback.Key(parentObject)
 		}
-		return client.ObjectKey{}, fmt.Errorf("could not determine source parent controller of %v", parentObject)
+		return client.ObjectKey{}, fmt.Errorf("could not determine grandparent controller of %v", parentObject)
 	}
 	return client.ObjectKey{Namespace: controller.Namespace, Name: controller.Name}, nil
 }
 
-func Must(key client.ObjectKey, err error) client.ObjectKey {
+// SetParentControllerReference implements Strategy.
+func (s Grandparent) SetParentControllerReference(parentObject, object client.Object, scheme *runtime.Scheme) error {
+	controller := partitionletmeta.GetParentControllerOf(parentObject)
+	if controller == nil {
+		if s.Fallback != nil {
+			return s.Fallback.SetParentControllerReference(parentObject, object, scheme)
+		}
+		return fmt.Errorf("could not determine grandparent controller of %v", parentObject)
+	}
+	return partitionletmeta.UpsertParentControllerReference(*controller, object)
+}
+
+// MustKey returns the key if err is nil. Panics otherwise.
+func MustKey(key client.ObjectKey, err error) client.ObjectKey {
 	utilruntime.Must(err)
 	return key
 }

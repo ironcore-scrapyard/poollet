@@ -24,7 +24,7 @@ import (
 
 	"github.com/onmetal/controller-utils/configutils"
 	"github.com/onmetal/partitionlet/controllers/shared"
-	"github.com/onmetal/partitionlet/names"
+	"github.com/onmetal/partitionlet/strategy"
 	flag "github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiserver/pkg/server/egressselector"
@@ -192,11 +192,11 @@ func main() {
 		}
 	}
 
-	namesStrategy := names.Strategy(&names.FixedNamespaceNamespacedNameStrategy{
+	strat := strategy.Strategy(&strategy.Simple{
 		Namespace: namespace,
 	})
 	if useGrandparentControllerKey {
-		namesStrategy = names.GrandparentControllerStrategy{Fallback: namesStrategy}
+		strat = strategy.Grandparent{Fallback: strat}
 	}
 
 	cfg, err := configutils.GetConfig()
@@ -275,7 +275,7 @@ func main() {
 			ParentCache:               parentCluster.GetCache(),
 			ParentFieldIndexer:        parentCluster.GetFieldIndexer(),
 			SharedParentFieldIndexer:  sharedParentFieldIndexer,
-			NamesStrategy:             namesStrategy,
+			Strategy:                  strat,
 			MachinePoolName:           machinePoolName,
 			SourceMachinePoolName:     sourceMachinePoolName,
 			SourceMachinePoolSelector: sourceMachinePoolSelector,
@@ -293,7 +293,7 @@ func main() {
 			ParentCache:               parentCluster.GetCache(),
 			ParentFieldIndexer:        parentCluster.GetFieldIndexer(),
 			SharedParentFieldIndexer:  sharedParentFieldIndexer,
-			NamesStrategy:             namesStrategy,
+			Strategy:                  strat,
 			StoragePoolName:           storagePoolName,
 			MachinePoolName:           machinePoolName,
 			SourceStoragePoolName:     sourceStoragePoolName,

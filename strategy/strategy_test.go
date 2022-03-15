@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package names_test
+package strategy_test
 
 import (
 	"fmt"
 
 	partitionletmeta "github.com/onmetal/partitionlet/meta"
-	. "github.com/onmetal/partitionlet/names"
+	. "github.com/onmetal/partitionlet/strategy"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -27,20 +27,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ = Describe("Names", func() {
-	Describe("Must", func() {
+var _ = Describe("Strategy", func() {
+	Describe("MustKey", func() {
 		It("should return the key if it computes without error", func() {
-			Expect(Must(client.ObjectKey{}, nil)).To(Equal(client.ObjectKey{}))
+			Expect(MustKey(client.ObjectKey{}, nil)).To(Equal(client.ObjectKey{}))
 		})
 
 		It("should panic with the error if there is any", func() {
-			Expect(func() { Must(client.ObjectKey{}, fmt.Errorf("some error")) }).To(Panic())
+			Expect(func() { MustKey(client.ObjectKey{}, fmt.Errorf("some error")) }).To(Panic())
 		})
 	})
 
-	Context("FixedNamespaceNamespacedNameStrategy", func() {
+	Context("Simple", func() {
 		It("should construct the key using a fixed namespace and a combination of namespace and name", func() {
-			strategy := FixedNamespaceNamespacedNameStrategy{
+			strategy := Simple{
 				Namespace: "default",
 			}
 			Expect(strategy.Key(&corev1.ConfigMap{
@@ -52,9 +52,9 @@ var _ = Describe("Names", func() {
 		})
 	})
 
-	Context("GrandparentControllerStrategy", func() {
+	Context("Grandparent", func() {
 		It("should compute the key from the parent object's parent controller", func() {
-			strategy := &GrandparentControllerStrategy{}
+			strategy := &Grandparent{}
 			grandparentCM := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "foo",
@@ -68,13 +68,13 @@ var _ = Describe("Names", func() {
 		})
 
 		It("should error if not annotation is specified and no fallback is present", func() {
-			strategy := &GrandparentControllerStrategy{}
+			strategy := &Grandparent{}
 			_, err := strategy.Key(&corev1.ConfigMap{})
 			Expect(err).To(HaveOccurred())
 		})
 
 		It("should call fallback if no parent annotation is specified", func() {
-			strategy := &GrandparentControllerStrategy{Fallback: FixedNamespaceNamespacedNameStrategy{Namespace: "foo"}}
+			strategy := &Grandparent{Fallback: Simple{Namespace: "foo"}}
 			Expect(strategy.Key(&corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "foo",

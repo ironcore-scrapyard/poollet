@@ -24,9 +24,8 @@ import (
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	"github.com/onmetal/onmetal-api/equality"
 	"github.com/onmetal/partitionlet/controllers/shared"
-	partitionletmeta "github.com/onmetal/partitionlet/meta"
-	"github.com/onmetal/partitionlet/names"
 	partitionletpredicate "github.com/onmetal/partitionlet/predicate"
+	"github.com/onmetal/partitionlet/strategy"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -62,7 +61,7 @@ type VolumeReconciler struct {
 	ParentFieldIndexer       client.FieldIndexer
 	SharedParentFieldIndexer *clientutils.SharedFieldIndexer
 
-	NamesStrategy names.Strategy
+	Strategy strategy.Strategy
 
 	StoragePoolName string
 	MachinePoolName string
@@ -88,7 +87,7 @@ func (r *VolumeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 }
 
 func (r *VolumeReconciler) reconcileExists(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume) (ctrl.Result, error) {
-	volumeKey, err := r.NamesStrategy.Key(parentVolume)
+	volumeKey, err := r.Strategy.Key(parentVolume)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("error determining volume key: %w", err)
 	}
@@ -313,7 +312,7 @@ func (r *VolumeReconciler) applyVolume(ctx context.Context, log logr.Logger, par
 				Name: r.SourceStoragePoolName,
 			}
 		}
-		return partitionletmeta.SetParentControllerReference(parentVolume, volume, r.Scheme)
+		return r.Strategy.SetParentControllerReference(parentVolume, volume, r.Scheme)
 	}); err != nil {
 		return nil, fmt.Errorf("error applying volume %s: %w", volumeKey, err)
 	}
@@ -517,7 +516,7 @@ func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		predicate.NewPredicateFuncs(func(obj client.Object) bool {
 			parentVolume := obj.(*storagev1alpha1.Volume)
 
-			key, err := r.NamesStrategy.Key(parentVolume)
+			key, err := r.Strategy.Key(parentVolume)
 			if err != nil {
 				log.Error(err, "Error constructing target key")
 				return false

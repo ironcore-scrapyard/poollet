@@ -53,15 +53,19 @@ func SetParentControllerReference(parentOwner, childControlled client.Object, sc
 		UID:        parentOwner.GetUID(),
 	}
 
-	if existing := GetParentControllerOf(childControlled); existing != nil && !referSameObject(*existing, ref) {
+	return UpsertParentControllerReference(ref, childControlled)
+}
+
+func UpsertParentControllerReference(ref ParentControllerReference, controlled client.Object) error {
+	if existing := GetParentControllerOf(controlled); existing != nil && !referSameObject(*existing, ref) {
 		return fmt.Errorf("object %s is already parent-controlled by %s %s",
-			client.ObjectKeyFromObject(childControlled),
+			client.ObjectKeyFromObject(controlled),
 			existing.Kind,
 			client.ObjectKey{Namespace: existing.Namespace, Name: existing.Name},
 		)
 	}
 
-	return setParentControllerRef(childControlled, ref)
+	return setParentControllerRef(controlled, ref)
 }
 
 func IsParentControlledBy(parentOwner, childControlled client.Object, scheme *runtime.Scheme) (bool, error) {

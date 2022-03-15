@@ -22,7 +22,7 @@ import (
 	. "github.com/onmetal/controller-utils/testutils"
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
-	"github.com/onmetal/partitionlet/names"
+	"github.com/onmetal/partitionlet/strategy"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
@@ -62,7 +62,7 @@ var _ = Describe("VolumeController", func() {
 		Expect(k8sClient.Create(ctx, parentVolume)).To(Succeed())
 
 		By("asserting it is not synced")
-		volumeKey := names.Must(namesStrategy.Key(parentVolume))
+		volumeKey := strategy.MustKey(strat.Key(parentVolume))
 		volume := &storagev1alpha1.Volume{}
 		Consistently(func(g Gomega) {
 			err := k8sClient.Get(ctx, volumeKey, volume)
@@ -166,7 +166,7 @@ var _ = Describe("VolumeController", func() {
 		Expect(k8sClient.Create(ctx, parentVolume)).To(Succeed())
 
 		By("asserting it is not synced")
-		volumeKey := names.Must(namesStrategy.Key(parentVolume))
+		volumeKey := strategy.MustKey(strat.Key(parentVolume))
 		volume := &storagev1alpha1.Volume{}
 		Consistently(func(g Gomega) {
 			g.Expect(k8sClient.Get(ctx, volumeKey, volume)).To(MatchErrorFunc(apierrors.IsNotFound))

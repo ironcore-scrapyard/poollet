@@ -24,7 +24,7 @@ import (
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	"github.com/onmetal/partitionlet/controllers/shared"
 	"github.com/onmetal/partitionlet/controllers/storage"
-	"github.com/onmetal/partitionlet/names"
+	"github.com/onmetal/partitionlet/strategy"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap/zapcore"
@@ -51,7 +51,7 @@ import (
 var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
-var namesStrategy names.Strategy
+var strat strategy.Strategy
 var sourceStoragePoolLabels = map[string]string{
 	"storagepool-kind": "source",
 }
@@ -122,7 +122,7 @@ func SetupTest(ctx context.Context) *corev1.Namespace {
 		}
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed(), "failed to create test namespace")
 
-		namesStrategy = names.FixedNamespaceNamespacedNameStrategy{Namespace: ns.Name}
+		strat = strategy.Simple{Namespace: ns.Name}
 
 		k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 			Scheme:             scheme.Scheme,
@@ -141,7 +141,7 @@ func SetupTest(ctx context.Context) *corev1.Namespace {
 			ParentCache:               k8sManager.GetCache(),
 			ParentFieldIndexer:        k8sManager.GetFieldIndexer(),
 			SharedParentFieldIndexer:  indexer,
-			NamesStrategy:             namesStrategy,
+			Strategy:                  strat,
 			MachinePoolName:           machinePoolName,
 			SourceMachinePoolName:     sourceMachinePoolName,
 			SourceMachinePoolSelector: sourceMachinePoolLabels,
@@ -155,7 +155,7 @@ func SetupTest(ctx context.Context) *corev1.Namespace {
 			ParentCache:               k8sManager.GetCache(),
 			ParentFieldIndexer:        k8sManager.GetFieldIndexer(),
 			SharedParentFieldIndexer:  indexer,
-			NamesStrategy:             namesStrategy,
+			Strategy:                  strat,
 			StoragePoolName:           storagePoolName,
 			MachinePoolName:           machinePoolName,
 			SourceStoragePoolName:     sourceStoragePoolName,
