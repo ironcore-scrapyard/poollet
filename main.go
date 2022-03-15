@@ -167,7 +167,7 @@ func main() {
 		setupLog.Error(err, "Machine pool name is not defined")
 		os.Exit(1)
 	}
-	if (controllers.Enabled(storagePoolController) || controllers.Enabled(volumeController)) && storagePoolName == "" {
+	if controllers.Enabled(storagePoolController) && storagePoolName == "" {
 		err := fmt.Errorf("storage pool name needs to be set")
 		setupLog.Error(err, "Storage pool name is not defined")
 		os.Exit(1)
