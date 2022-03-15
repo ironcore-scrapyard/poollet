@@ -487,7 +487,7 @@ func (r *MachineReconciler) delete(ctx context.Context, log logr.Logger, parentM
 	}
 
 	log.V(1).Info("Volume claims, Ignition and Machine gone, removing finalizer")
-	if err := clientutils.PatchRemoveFinalizer(ctx, r.Client, parentMachine, machineFinalizer); err != nil {
+	if err := clientutils.PatchRemoveFinalizer(ctx, r.ParentClient, parentMachine, machineFinalizer); err != nil {
 		return ctrl.Result{}, fmt.Errorf("error removing finalizer: %w", err)
 	}
 
