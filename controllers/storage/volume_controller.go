@@ -92,11 +92,16 @@ func (r *VolumeReconciler) reconcileExists(ctx context.Context, log logr.Logger,
 		return ctrl.Result{}, fmt.Errorf("error determining volume key: %w", err)
 	}
 
-	log = log.WithValues("VolumeKey", volumeKey)
+	finalizer, err := r.Strategy.Finalizer(parentVolume, volumeFinalizer)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("error determining volume finalizer: %w", err)
+	}
+
+	log = log.WithValues("VolumeKey", volumeKey, "Finalizer", finalizer)
 	ctx = ctrl.LoggerInto(ctx, log)
 
 	if !parentVolume.DeletionTimestamp.IsZero() {
-		return r.delete(ctx, log, parentVolume, volumeKey)
+		return r.delete(ctx, log, parentVolume, volumeKey, finalizer)
 	}
 
 	used, err := r.isParentUsed(ctx, log, parentVolume)
@@ -106,11 +111,11 @@ func (r *VolumeReconciler) reconcileExists(ctx context.Context, log logr.Logger,
 
 	if !used {
 		log.V(1).Info("Parent is not used, continuing with deletion flow")
-		return r.delete(ctx, log, parentVolume, volumeKey)
+		return r.delete(ctx, log, parentVolume, volumeKey, finalizer)
 	}
 
 	log.V(1).Info("Parent is used, continuing with reconciliation flow")
-	return r.reconcile(ctx, log, parentVolume, volumeKey)
+	return r.reconcile(ctx, log, parentVolume, volumeKey, finalizer)
 }
 
 func (r *VolumeReconciler) isParentUsed(ctx context.Context, log logr.Logger, parent *storagev1alpha1.Volume) (bool, error) {
@@ -169,8 +174,8 @@ func (r *VolumeReconciler) isParentUsedViaMachinePool(ctx context.Context, paren
 	return len(machineList.Items) > 0, nil
 }
 
-func (r *VolumeReconciler) delete(ctx context.Context, log logr.Logger, parent *storagev1alpha1.Volume, volumeKey client.ObjectKey) (ctrl.Result, error) {
-	if !controllerutil.ContainsFinalizer(parent, volumeFinalizer) {
+func (r *VolumeReconciler) delete(ctx context.Context, log logr.Logger, parent *storagev1alpha1.Volume, volumeKey client.ObjectKey, finalizer string) (ctrl.Result, error) {
+	if !controllerutil.ContainsFinalizer(parent, finalizer) {
 		log.V(1).Info("Volume contains no finalizer, no deletion needs to be done")
 		return ctrl.Result{}, nil
 	}
@@ -192,7 +197,7 @@ func (r *VolumeReconciler) delete(ctx context.Context, log logr.Logger, parent *
 	}
 
 	log.V(1).Info("Object is gone, removing finalizer on parent object")
-	if err := clientutils.PatchRemoveFinalizer(ctx, r.ParentClient, parent, volumeFinalizer); err != nil {
+	if err := clientutils.PatchRemoveFinalizer(ctx, r.ParentClient, parent, finalizer); err != nil {
 		return ctrl.Result{}, fmt.Errorf("error removing finalizer: %w", err)
 	}
 
@@ -225,9 +230,9 @@ func (r *VolumeReconciler) patchParentStatus(
 	return nil
 }
 
-func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume, volumeKey client.ObjectKey) (ctrl.Result, error) {
+func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, parentVolume *storagev1alpha1.Volume, volumeKey client.ObjectKey, finalizer string) (ctrl.Result, error) {
 	log.V(1).Info("Reconciling")
-	modified, err := clientutils.PatchEnsureFinalizer(ctx, r.ParentClient, parentVolume, volumeFinalizer)
+	modified, err := clientutils.PatchEnsureFinalizer(ctx, r.ParentClient, parentVolume, finalizer)
 	if err != nil || modified {
 		return ctrl.Result{}, err
 	}
@@ -620,8 +625,9 @@ func (r *VolumeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	if err := c.Watch(
 		&source.Kind{Type: &storagev1alpha1.Volume{}},
-		&partitionlethandler.EnqueueRequestForParentController{
-			OwnerType: &storagev1alpha1.Volume{},
+		&partitionlethandler.EnqueueRequestForParentOwner{
+			OwnerType:    &storagev1alpha1.Volume{},
+			IsController: r.Strategy.IsController(),
 		},
 		&partitionletpredicate.VolatileConditionFieldsPredicate{},
 	); err != nil {

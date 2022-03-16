@@ -97,13 +97,18 @@ func (r *MachineReconciler) reconcileExists(ctx context.Context, log logr.Logger
 		return ctrl.Result{}, fmt.Errorf("error determining machine key: %w", err)
 	}
 
-	log = log.WithValues("MachineKey", machineKey)
+	finalizer, err := r.Strategy.Finalizer(parentMachine, machineFinalizer)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("error determining finalizer: %w", err)
+	}
+
+	log = log.WithValues("MachineKey", machineKey, "Finalizer", finalizer)
 	ctx = ctrl.LoggerInto(ctx, log)
 
 	if !parentMachine.DeletionTimestamp.IsZero() {
-		return r.delete(ctx, log, parentMachine, machineKey)
+		return r.delete(ctx, log, parentMachine, machineKey, finalizer)
 	}
-	return r.reconcile(ctx, log, parentMachine, machineKey)
+	return r.reconcile(ctx, log, parentMachine, machineKey, finalizer)
 }
 
 func (r *MachineReconciler) applyIgnition(ctx context.Context, log logr.Logger, parentMachine *computev1alpha1.Machine, machineKey client.ObjectKey) (*commonv1alpha1.ConfigMapKeySelector, error) {
@@ -158,11 +163,11 @@ func (r *MachineReconciler) applyIgnition(ctx context.Context, log logr.Logger, 
 
 }
 
-func (r *MachineReconciler) reconcile(ctx context.Context, log logr.Logger, parentMachine *computev1alpha1.Machine, machineKey client.ObjectKey) (ctrl.Result, error) {
+func (r *MachineReconciler) reconcile(ctx context.Context, log logr.Logger, parentMachine *computev1alpha1.Machine, machineKey client.ObjectKey, finalizer string) (ctrl.Result, error) {
 	log.V(1).Info("Reconcile")
 
 	log.V(1).Info("Ensuring finalizer")
-	modified, err := clientutils.PatchEnsureFinalizer(ctx, r.ParentClient, parentMachine, machineFinalizer)
+	modified, err := clientutils.PatchEnsureFinalizer(ctx, r.ParentClient, parentMachine, finalizer)
 	if err != nil || modified {
 		return ctrl.Result{}, err
 	}
@@ -425,10 +430,10 @@ func (r *MachineReconciler) patchParentStatus(
 	return nil
 }
 
-func (r *MachineReconciler) delete(ctx context.Context, log logr.Logger, parentMachine *computev1alpha1.Machine, machineKey client.ObjectKey) (ctrl.Result, error) {
+func (r *MachineReconciler) delete(ctx context.Context, log logr.Logger, parentMachine *computev1alpha1.Machine, machineKey client.ObjectKey, finalizer string) (ctrl.Result, error) {
 	log.V(1).Info("Delete")
 
-	if !controllerutil.ContainsFinalizer(parentMachine, machineFinalizer) {
+	if !controllerutil.ContainsFinalizer(parentMachine, finalizer) {
 		log.V(1).Info("Finalizer not present, no cleanup necessary")
 		return ctrl.Result{}, nil
 	}
@@ -487,7 +492,7 @@ func (r *MachineReconciler) delete(ctx context.Context, log logr.Logger, parentM
 	}
 
 	log.V(1).Info("Volume claims, Ignition and Machine gone, removing finalizer")
-	if err := clientutils.PatchRemoveFinalizer(ctx, r.ParentClient, parentMachine, machineFinalizer); err != nil {
+	if err := clientutils.PatchRemoveFinalizer(ctx, r.ParentClient, parentMachine, finalizer); err != nil {
 		return ctrl.Result{}, fmt.Errorf("error removing finalizer: %w", err)
 	}
 
@@ -608,14 +613,16 @@ func (r *MachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &partitionlethandler.EnqueueRequestForParentController{
-		OwnerType: &computev1alpha1.Machine{},
+	if err := c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &partitionlethandler.EnqueueRequestForParentOwner{
+		OwnerType:    &computev1alpha1.Machine{},
+		IsController: r.Strategy.IsController(),
 	}, &predicate.GenerationChangedPredicate{}); err != nil {
 		return err
 	}
 
-	if err := c.Watch(&source.Kind{Type: &storagev1alpha1.VolumeClaim{}}, &partitionlethandler.EnqueueRequestForParentController{
-		OwnerType: &computev1alpha1.Machine{},
+	if err := c.Watch(&source.Kind{Type: &storagev1alpha1.VolumeClaim{}}, &partitionlethandler.EnqueueRequestForParentOwner{
+		OwnerType:    &computev1alpha1.Machine{},
+		IsController: r.Strategy.IsController(),
 	}, predicate.Funcs{
 		UpdateFunc: func(updateEvent event.UpdateEvent) bool {
 			oldVolumeClaim, newVolumeClaim := updateEvent.ObjectOld.(*storagev1alpha1.VolumeClaim), updateEvent.ObjectNew.(*storagev1alpha1.VolumeClaim)

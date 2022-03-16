@@ -87,7 +87,7 @@ func main() {
 	var parentKubeconfig string
 
 	var namespace string
-	var useGrandparentControllerKey bool
+	var broker bool
 
 	var machinePoolName string
 	var machinePoolProviderID string
@@ -116,8 +116,7 @@ func main() {
 	flag.StringVar(&parentKubeconfig, "parent-kubeconfig", "", "Path pointing to a parent kubeconfig.")
 
 	flag.StringVar(&namespace, "namespace", corev1.NamespaceDefault, "Namespace to sync machines to.")
-	flag.BoolVar(&useGrandparentControllerKey, "use-grandparent-controller-key", false, "Whether to use the parent's parent controller (thus grandparent "+
-		"controller key) to determine the target key of the object. Useful to redirect to an actual controller in another cluster.")
+	flag.BoolVar(&broker, "broker", false, "Whether to start the partitionlet in broker-mode or not.")
 
 	flag.StringVar(&machinePoolName, "machine-pool-name", hostName, "MachinePool to announce in the parent cluster.")
 	flag.StringVar(&machinePoolProviderID, "machine-pool-provider-id", "", "Provider ID (usually <provider-type>://<id>) of the announced MachinePool.")
@@ -195,8 +194,8 @@ func main() {
 	strat := strategy.Strategy(&strategy.Simple{
 		Namespace: namespace,
 	})
-	if useGrandparentControllerKey {
-		strat = strategy.Grandparent{Fallback: strat}
+	if broker {
+		strat = strategy.Broker{Fallback: strat}
 	}
 
 	cfg, err := configutils.GetConfig()

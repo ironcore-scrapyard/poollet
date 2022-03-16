@@ -52,35 +52,69 @@ var _ = Describe("Strategy", func() {
 		})
 	})
 
-	Context("Grandparent", func() {
-		It("should compute the key from the parent object's parent controller", func() {
-			strategy := &Grandparent{}
-			grandparentCM := &corev1.ConfigMap{
+	Context("Broker", func() {
+		var (
+			strat                    Broker
+			stratWithFallback        Broker
+			obj, ownedObj, parentObj client.Object
+			key, parentKey           client.ObjectKey
+		)
+		BeforeEach(func() {
+			strat = Broker{}
+			stratWithFallback = Broker{
+				Fallback: Simple{Namespace: "foo"},
+			}
+			obj = &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "foo",
 					Name:      "bar",
 				},
 			}
-			parentCM := &corev1.ConfigMap{}
-			Expect(partitionletmeta.SetParentControllerReference(grandparentCM, parentCM, scheme.Scheme)).To(Succeed())
-
-			Expect(strategy.Key(parentCM)).To(Equal(client.ObjectKey{Namespace: "foo", Name: "bar"}))
-		})
-
-		It("should error if not annotation is specified and no fallback is present", func() {
-			strategy := &Grandparent{}
-			_, err := strategy.Key(&corev1.ConfigMap{})
-			Expect(err).To(HaveOccurred())
-		})
-
-		It("should call fallback if no parent annotation is specified", func() {
-			strategy := &Grandparent{Fallback: Simple{Namespace: "foo"}}
-			Expect(strategy.Key(&corev1.ConfigMap{
+			parentObj = &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "foo",
-					Name:      "bar",
+					Namespace: "baz",
+					Name:      "bang",
 				},
-			})).To(Equal(client.ObjectKey{Namespace: "foo", Name: "foo--bar"}))
+			}
+			ownedObj = obj.DeepCopyObject().(client.Object)
+			Expect(partitionletmeta.SetParentControllerReference(parentObj, ownedObj, scheme.Scheme)).To(Succeed())
+			key = client.ObjectKeyFromObject(obj)
+			parentKey = client.ObjectKeyFromObject(parentObj)
+			_ = key
+		})
+
+		Describe("Key", func() {
+			It("should compute the key from the parent object's parent controller", func() {
+				Expect(strat.Key(ownedObj)).To(Equal(parentKey))
+			})
+
+			It("should error if not annotation is specified and no fallback is present", func() {
+				_, err := strat.Key(obj)
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("should call fallback if no parent annotation is specified", func() {
+				Expect(stratWithFallback.Key(obj)).To(Equal(client.ObjectKey{Namespace: "foo", Name: "foo--bar"}))
+			})
+		})
+
+		Describe("Finalizer", func() {
+			It("should use the fallback finalizer if the object is not parent-controlled", func() {
+				Expect(stratWithFallback.Finalizer(obj, "foo")).To(Equal("foo"))
+			})
+
+			It("should error if no fallback is set and the object is not parent-controlled", func() {
+				_, err := strat.Finalizer(obj, "foo")
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("should prefix the finalizer domain if the object is parent-controlled", func() {
+				Expect(strat.Finalizer(ownedObj, "domain/foo")).To(Equal("broker.domain/foo"))
+			})
+
+			It("should add the partitionlet broker domain if the object is parent-controlled and the finalizer does not have a domain", func() {
+				Expect(strat.Finalizer(ownedObj, "foo")).To(Equal("broker.partitionlet.onmetal.de/foo"))
+			})
 		})
 	})
 })
