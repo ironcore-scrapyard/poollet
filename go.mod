@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	cloud.google.com/go v0.81.0 // indirect
-	github.com/go-logr/logr v1.2.2
+	github.com/go-logr/logr v1.2.3
 	github.com/golang/mock v1.6.0
 	github.com/google/addlicense v1.0.0
 	github.com/google/uuid v1.3.0 // indirect
