@@ -1,0 +1,122 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - secrets/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumes/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumes/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - storageclasses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumeclaims
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumeclaims/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumeclaims/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumepools
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - patch
+      - update
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumepools/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumepools/finalizers
+    verbs:
+      - patch
+      - update

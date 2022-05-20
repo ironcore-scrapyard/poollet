@@ -1,0 +1,294 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - secrets/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - compute.api.onmetal.de
+    resources:
+      - machines
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - compute.api.onmetal.de
+    resources:
+      - machines/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - compute.api.onmetal.de
+    resources:
+      - machines/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - compute.api.onmetal.de
+    resources:
+      - machineclasses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - compute.api.onmetal.de
+    resources:
+      - machinepools
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - patch
+      - update
+  - apiGroups:
+      - compute.api.onmetal.de
+    resources:
+      - machinepools/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - compute.api.onmetal.de
+    resources:
+      - machinepools/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - networks
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - networks/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - networks/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - networkinterfaces
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - networkinterfaces/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - networkinterfaces/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - virtualips
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - virtualips/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - virtualips/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - aliasprefixes
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - aliasprefixes/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - aliasprefixes/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - aliasprefixroutings
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - aliasprefixroutings/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumes
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumes/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumes/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - storageclasses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumeclaims
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumeclaims/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumeclaims/finalizers
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumepools
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - patch
+      - update
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumepools/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumepools/finalizers
+    verbs:
+      - patch
+      - update

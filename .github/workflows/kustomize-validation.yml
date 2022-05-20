@@ -9,12 +9,12 @@ on:
 
 jobs:
   kustomize-validation:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Check out code
         uses: actions/checkout@v3
       - uses: imranismail/setup-kustomize@v1
         with:
-          kustomize-version: 4.5.2
+          kustomize-version: 4.5.4
       - run: |
-          ./hack/validate_kustomize.sh
+          ./hack/validate-kustomize.sh

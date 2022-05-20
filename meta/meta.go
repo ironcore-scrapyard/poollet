@@ -15,172 +15,96 @@
 package meta
 
 import (
-	"encoding/json"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const (
-	domain                         = "partitionlet.onmetal.de"
-	parentOwnerReferenceAnnotation = domain + "/parent-owner"
-)
-
-type ParentOwnerReference struct {
-	APIVersion string    `json:"apiVersion"`
-	Kind       string    `json:"kind"`
-	Namespace  string    `json:"namespace,omitempty"`
-	Name       string    `json:"name"`
-	UID        types.UID `json:"uid"`
-	Controller *bool     `json:"controller,omitempty"`
-}
-
-func SetParentControllerReference(parentOwner, childControlled client.Object, scheme *runtime.Scheme) error {
-	gvk, err := apiutil.GVKForObject(parentOwner, scheme)
+func NewListForObject(obj client.Object, scheme *runtime.Scheme) (client.ObjectList, error) {
+	gvk, err := apiutil.GVKForObject(obj, scheme)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	ref := ParentOwnerReference{
-		APIVersion: gvk.GroupVersion().String(),
-		Kind:       gvk.Kind,
-		Namespace:  parentOwner.GetNamespace(),
-		Name:       parentOwner.GetName(),
-		UID:        parentOwner.GetUID(),
-		Controller: pointer.Bool(true),
-	}
+	listGVK := gvk.GroupVersion().WithKind(gvk.Kind + "List")
 
-	if existing := GetParentControllerOf(childControlled); existing != nil && !referSameObject(*existing, ref) {
-		return fmt.Errorf("object %s is already parent-controlled by %s %s",
-			client.ObjectKeyFromObject(childControlled),
-			existing.Kind,
-			client.ObjectKey{Namespace: existing.Namespace, Name: existing.Name},
-		)
-	}
-
-	upsertParentOwnerRef(ref, childControlled)
-	return nil
-}
-
-func SetParentOwnerReference(parentOwner, object client.Object, scheme *runtime.Scheme) error {
-	gvk, err := apiutil.GVKForObject(parentOwner, scheme)
-	if err != nil {
-		return err
-	}
-	ref := ParentOwnerReference{
-		APIVersion: gvk.GroupVersion().String(),
-		Kind:       gvk.Kind,
-		Namespace:  parentOwner.GetNamespace(),
-		Name:       parentOwner.GetName(),
-		UID:        parentOwner.GetUID(),
-	}
-	upsertParentOwnerRef(ref, object)
-	return nil
-}
-
-func upsertParentOwnerRef(ref ParentOwnerReference, object client.Object) {
-	owners := GetParentOwnerReferences(object)
-	if idx := indexParentOwnerRef(owners, ref); idx == -1 {
-		owners = append(owners, ref)
-	} else {
-		owners[idx] = ref
-	}
-	SetParentOwnerReferences(object, owners)
-}
-
-// indexParentOwnerRef returns the index of the parent owner reference in the slice if found, or -1.
-func indexParentOwnerRef(ownerReferences []ParentOwnerReference, ref ParentOwnerReference) int {
-	for index, r := range ownerReferences {
-		if referSameObject(r, ref) {
-			return index
+	switch obj.(type) {
+	case *unstructured.Unstructured:
+		list := &unstructured.UnstructuredList{}
+		list.SetGroupVersionKind(listGVK)
+		return list, nil
+	case *metav1.PartialObjectMetadata:
+		list := &metav1.PartialObjectMetadataList{}
+		list.SetGroupVersionKind(listGVK)
+		return list, nil
+	default:
+		rList, err := scheme.New(listGVK)
+		if err != nil {
+			return nil, err
 		}
+		if list, ok := rList.(client.ObjectList); ok {
+			return list, nil
+		}
+		return nil, fmt.Errorf("type %T does not implement client.ObjectList", rList)
 	}
-	return -1
 }
 
-func IsParentControlledBy(parentOwner, childControlled client.Object, scheme *runtime.Scheme) (bool, error) {
-	existing := GetParentControllerOf(childControlled)
-	if existing == nil {
-		return false, nil
-	}
+func EachListItem(list client.ObjectList, f func(obj client.Object) error) error {
+	return meta.EachListItem(list, func(rObj runtime.Object) error {
+		obj, ok := rObj.(client.Object)
+		if !ok {
+			return fmt.Errorf("object %T does not implement client.Object", rObj)
+		}
 
-	gvk, err := apiutil.GVKForObject(parentOwner, scheme)
-	if err != nil {
-		return false, err
-	}
-
-	ref := ParentOwnerReference{
-		APIVersion: gvk.GroupVersion().String(),
-		Kind:       gvk.Kind,
-		Namespace:  parentOwner.GetNamespace(),
-		Name:       parentOwner.GetName(),
-		UID:        parentOwner.GetUID(),
-	}
-
-	return referSameObject(ref, *existing), nil
+		return f(obj)
+	})
 }
 
-func referSameObject(a, b ParentOwnerReference) bool {
-	aGV, err := schema.ParseGroupVersion(a.APIVersion)
-	if err != nil {
-		return false
+func SetLabel(obj metav1.Object, key, value string) {
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
 	}
 
-	bGV, err := schema.ParseGroupVersion(b.APIVersion)
-	if err != nil {
-		return false
-	}
-
-	return aGV.Group == bGV.Group && a.Kind == b.Kind && a.Namespace == b.Namespace && a.Name == b.Name
+	labels[key] = value
+	obj.SetLabels(labels)
 }
 
-func SetParentOwnerReferences(obj client.Object, refs []ParentOwnerReference) {
-	data, err := json.Marshal(refs)
-	if err != nil {
-		log.Log.WithName("SetParentOwnerReferences").Error(err, "Error encoding parent owner references")
-		return
+func SetLabels(obj metav1.Object, set map[string]string) {
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
 	}
 
+	for k, v := range set {
+		labels[k] = v
+	}
+	obj.SetLabels(labels)
+}
+
+func SetAnnotation(obj metav1.Object, key, value string) {
 	annotations := obj.GetAnnotations()
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
-	annotations[parentOwnerReferenceAnnotation] = string(data)
+
+	annotations[key] = value
 	obj.SetAnnotations(annotations)
 }
 
-func GetParentOwnerReferences(obj client.Object) []ParentOwnerReference {
-	refsData, ok := obj.GetAnnotations()[parentOwnerReferenceAnnotation]
-	if !ok {
-		return nil
+func SetAnnotations(obj metav1.Object, set map[string]string) {
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
 	}
 
-	var refs []ParentOwnerReference
-	if err := json.Unmarshal([]byte(refsData), &refs); err != nil {
-		log.Log.WithName("GetParentOwnerReferences").Error(err, "Error decoding parent owner references")
-		return nil
+	for k, v := range set {
+		annotations[k] = v
 	}
-
-	return refs
-}
-
-func GetParentControllerOf(childControllee client.Object) *ParentOwnerReference {
-	refs := GetParentOwnerReferences(childControllee)
-	if refs == nil {
-		return nil
-	}
-
-	for _, ref := range refs {
-		if controller := ref.Controller; controller != nil && *controller {
-			ref := ref
-			return &ref
-		}
-	}
-	return nil
+	obj.SetAnnotations(annotations)
 }

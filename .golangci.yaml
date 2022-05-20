@@ -1,7 +1,5 @@
 run:
   timeout: 3m
-  skip-dirs:
-    - controllers/machinerequest/* # TODO: This should be fixed ASAP
 
 linters:
   enable:
@@ -9,11 +7,30 @@ linters:
     - ineffassign
     - misspell
     - goimports
+    - importas
 
 severity:
   default-severity: error
 
 linters-settings:
+  importas:
+    alias:
+      # Alias all onmetal api packages as <name><version> in a single string, e.g.
+      # computev1alpha1
+      - pkg: github.com/onmetal/onmetal-api/apis/(\w+)/(v[\w\d]+)
+        alias: $1$2
+      - pkg: github.com/onmetal/poollet/api/(\w+)/controller
+        alias: ${1}ctrl
+      - pkg: github.com/onmetal/poollet/api/(\w+)/index
+        alias: ${1}index
+      - pkg: github.com/onmetal/poollet/api/(\w+)/helper
+        alias: ${1}helper
+      - pkg: github.com/onmetal/poollet/api/(\w+)/predicate
+        alias: ${1}predicate
+      - pkg: github.com/onmetal/poollet/api/(\w+)/client
+        alias: ${1}client
+      - pkg: github.com/onmetal/poollet/api/(\w+)/client/index
+        alias: ${1}indexclient
   misspell:
     ignore-words:
       - strat

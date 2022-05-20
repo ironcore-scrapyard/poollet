@@ -1,8 +1,5 @@
 name: Build and Publish Docker Image
 
-env:
-  platforms: linux/amd64,linux/arm64
-
 on:
   release:
     types:
@@ -24,15 +21,26 @@ on:
 
 jobs:
   buildAndPush:
+    strategy:
+      matrix:
+        image:
+          - name: partitionlet
+            target: partitionlet
+          - name: machinebrokerlet
+            target: machinebrokerlet
+          - name: volumebrokerlet
+            target: volumebrokerlet
+          - name: proxyvolumebrokerlet
+            target: proxyvolumebrokerlet
     if: ${{ github.event.label.name == 'ok-to-image' }} || ${{ github.event.label.name == 'ok-to-🐳' }} || ${{ github.ref == 'refs/heads/main' }}
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: docker/metadata-action@v4
         id: meta
         with:
           images: |
-            ghcr.io/${{ github.repository_owner }}/partitionlet-controller-manager
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }}
           tags: |
             type=semver,pattern={{version}}
             type=schedule
@@ -45,8 +53,7 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
         with:
-          image: tonistiigi/binfmt:latest
-          platforms: ${{env.platforms}}
+          platforms: all
       # workaround for self-hosted runner
       # https://github.com/mumoshu/actions-runner-controller-ci/commit/e91c8c0f6ca82aa7618010c6d2f417aa46c4a4bf
       - name: Set up Docker Context for Buildx
@@ -71,9 +78,8 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          platforms: ${{env.platforms}}
+          platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          secrets: |
-            "github_pat=${{ secrets.BOT_PAT }}"
+          target: ${{ matrix.image.target }}

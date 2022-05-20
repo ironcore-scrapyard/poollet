@@ -1,0 +1,175 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - update
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - update
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - update
+      - patch
+  - apiGroups:
+      - compute.api.onmetal.de
+    resources:
+      - machines
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - update
+      - patch
+  - apiGroups:
+      - compute.api.onmetal.de
+    resources:
+      - machineclasses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - compute.api.onmetal.de
+    resources:
+      - machinepools
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - patch
+      - update
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - networks
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - update
+      - patch
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - networkinterfaces
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - update
+      - patch
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - virtualips
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - update
+      - patch
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - aliasprefixes
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - update
+      - patch
+  - apiGroups:
+      - networking.api.onmetal.de
+    resources:
+      - aliasprefixroutings
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - update
+      - patch
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumes
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - update
+      - patch
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - storageclasses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumeclaims
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - update
+      - patch
+  - apiGroups:
+      - storage.api.onmetal.de
+    resources:
+      - volumepools
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - patch
+      - update
