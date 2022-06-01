@@ -128,7 +128,7 @@ func (r *MixedVolumeReconciler) delete(ctx context.Context, log logr.Logger, vol
 }
 
 func (r *MixedVolumeReconciler) applierFor(volume *storagev1alpha1.Volume) (applier storage.VolumeApplier, managed bool, err error) {
-	if volume.Spec.VolumePoolRef != nil && volume.Spec.VolumePoolRef.Name == r.TargetPoolName {
+	if volume.Spec.VolumePoolRef != nil && volume.Spec.VolumePoolRef.Name == r.PoolName {
 		return &storage.SyncVolumeApplier{
 			Provider:         r.Provider,
 			TargetPoolName:   r.TargetPoolName,
