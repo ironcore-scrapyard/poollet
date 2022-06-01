@@ -39,7 +39,7 @@ import (
 )
 
 type VolumeApplier interface {
-	ApplyTarget(ctx context.Context, volume *storagev1alpha1.Volume) (*storagev1alpha1.Volume, error)
+	ApplyTarget(ctx context.Context, volume *storagev1alpha1.Volume) (*storagev1alpha1.Volume, bool, error)
 	GetTarget(ctx context.Context, volume *storagev1alpha1.Volume) (*storagev1alpha1.Volume, error)
 	DeleteTarget(ctx context.Context, volume *storagev1alpha1.Volume) (done bool, err error)
 }
@@ -52,10 +52,10 @@ type ProxyVolumeApplier struct {
 
 var errNoBrokerController = fmt.Errorf("volume does not have broker controller set")
 
-func (r *ProxyVolumeApplier) ApplyTarget(ctx context.Context, volume *storagev1alpha1.Volume) (*storagev1alpha1.Volume, error) {
+func (r *ProxyVolumeApplier) ApplyTarget(ctx context.Context, volume *storagev1alpha1.Volume) (*storagev1alpha1.Volume, bool, error) {
 	brokerCtrl := brokermeta.GetBrokerControllerOf(volume)
 	if brokerCtrl == nil {
-		return nil, errNoBrokerController
+		return nil, false, errNoBrokerController
 	}
 
 	target := &storagev1alpha1.Volume{}
@@ -65,18 +65,18 @@ func (r *ProxyVolumeApplier) ApplyTarget(ctx context.Context, volume *storagev1a
 	}
 
 	if err := r.TargetClient.Get(ctx, targetKey, target); err != nil {
-		return nil, fmt.Errorf("error getting brokered target %s: %w", targetKey, err)
+		return nil, false, fmt.Errorf("error getting brokered target %s: %w", targetKey, err)
 	}
 
 	baseTarget := target.DeepCopy()
 	if err := brokermeta.SetBrokerOwnerReference(r.ClusterName, volume, target, r.Scheme); err != nil {
-		return nil, fmt.Errorf("error setting target %s broker owner reference: %w", targetKey, err)
+		return nil, false, fmt.Errorf("error setting target %s broker owner reference: %w", targetKey, err)
 	}
 	if err := r.TargetClient.Patch(ctx, target, client.MergeFrom(baseTarget)); err != nil {
-		return nil, fmt.Errorf("error patching target %s: %w", targetKey, err)
+		return nil, false, fmt.Errorf("error patching target %s: %w", targetKey, err)
 	}
 
-	return target, nil
+	return target, false, nil
 }
 
 func (r *ProxyVolumeApplier) GetTarget(ctx context.Context, volume *storagev1alpha1.Volume) (*storagev1alpha1.Volume, error) {
@@ -213,10 +213,10 @@ func (r *SyncVolumeApplier) registerDefaultMutation(ctx context.Context, volume,
 	return nil
 }
 
-func (r *SyncVolumeApplier) ApplyTarget(ctx context.Context, volume *storagev1alpha1.Volume) (*storagev1alpha1.Volume, error) {
+func (r *SyncVolumeApplier) ApplyTarget(ctx context.Context, volume *storagev1alpha1.Volume) (*storagev1alpha1.Volume, bool, error) {
 	targetNamespace, err := provider.TargetNamespaceFor(ctx, r.Provider, volume)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	var (
@@ -229,21 +229,21 @@ func (r *SyncVolumeApplier) ApplyTarget(ctx context.Context, volume *storagev1al
 		b sync.CompositeMutationBuilder
 	)
 	if err := r.registerImagePullSecretMutation(ctx, volume, target, &b); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err := r.registerDefaultMutation(ctx, volume, target, &b); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err := r.registerVolumeClaimMutation(ctx, volume, target, &b); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, volume, target,
 		b.Mutate(target),
 	); err != nil {
-		return nil, sync.IgnorePartialCreate(err)
+		return nil, b.PartialSync, sync.IgnorePartialCreate(err)
 	}
-	return target, nil
+	return target, b.PartialSync, nil
 }
 
 func (r *SyncVolumeApplier) GetTarget(ctx context.Context, volume *storagev1alpha1.Volume) (*storagev1alpha1.Volume, error) {

@@ -136,28 +136,28 @@ func (r *VolumeReconciler) reconcile(ctx context.Context, log logr.Logger, volum
 	}
 
 	log.V(1).Info("Applying target volume")
-	targetVolume, err := r.applier().ApplyTarget(ctx, volume)
+	target, partial, err := r.applier().ApplyTarget(ctx, volume)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if targetVolume == nil {
-		log.V(1).Info("Dependencies of target volume are not yet ready")
-		return ctrl.Result{}, nil
+	if target == nil {
+		log.V(1).Info("Target dependencies are not ready", "Partial", partial)
+		return ctrl.Result{Requeue: partial}, nil
 	}
 
 	log.V(1).Info("Applying access")
-	access, err := r.accessApplier().ApplyAccess(ctx, log, volume, targetVolume)
+	access, err := r.accessApplier().ApplyAccess(ctx, log, volume, target)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("error applying volume access: %w", err)
 	}
 
 	log.V(1).Info("Patching status")
-	if err := storage.PatchVolumeStatus(ctx, r.Client, volume, targetVolume.Status.State, access); err != nil {
+	if err := storage.PatchVolumeStatus(ctx, r.Client, volume, target.Status.State, access); err != nil {
 		return ctrl.Result{}, fmt.Errorf("error patching volume status: %w", err)
 	}
 
-	log.V(1).Info("Successfully reconciled volume")
-	return ctrl.Result{}, nil
+	log.V(1).Info("Successfully reconciled volume", "Partial", partial)
+	return ctrl.Result{Requeue: partial}, nil
 }
 
 func (r *VolumeReconciler) Target(ctx context.Context, key client.ObjectKey, obj client.Object) error {

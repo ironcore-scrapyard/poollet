@@ -241,6 +241,20 @@ func (r *NetworkInterfaceReconciler) reconcile(ctx context.Context, log logr.Log
 		return ctrl.Result{}, err
 	}
 
+	target, partial, err := r.applyTarget(ctx, log, nic, targetNamespace)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if target == nil {
+		log.V(1).Info("Target dependencies are not ready", "Partial", partial)
+		return ctrl.Result{Requeue: partial}, nil
+	}
+
+	log.V(1).Info("Applied target", "Partial", partial)
+	return ctrl.Result{Requeue: partial}, nil
+}
+
+func (r *NetworkInterfaceReconciler) applyTarget(ctx context.Context, log logr.Logger, nic *networkingv1alpha1.NetworkInterface, targetNamespace *corev1.Namespace) (*networkingv1alpha1.NetworkInterface, bool, error) {
 	var (
 		target = &networkingv1alpha1.NetworkInterface{
 			ObjectMeta: metav1.ObjectMeta{
@@ -252,27 +266,25 @@ func (r *NetworkInterfaceReconciler) reconcile(ctx context.Context, log logr.Log
 	)
 
 	if err := r.registerDefaultMutation(ctx, nic, target, &b); err != nil {
-		return ctrl.Result{}, err
+		return nil, false, err
 	}
 	if err := r.registerNetworkMutation(ctx, nic, target, &b); err != nil {
-		return ctrl.Result{}, err
+		return nil, false, err
 	}
 	if err := r.registerMachineMutation(ctx, nic, target, &b); err != nil {
-		return ctrl.Result{}, err
+		return nil, false, err
 	}
 	if err := r.registerVirtualIPMutation(ctx, nic, target, &b); err != nil {
-		return ctrl.Result{}, err
+		return nil, false, err
 	}
 
 	log.V(1).Info("Applying target")
 	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, nic, target,
 		b.Mutate(target),
 	); err != nil {
-		return ctrl.Result{}, fmt.Errorf("error applying target: %w", err)
+		return nil, b.PartialSync, sync.IgnorePartialCreate(err)
 	}
-
-	log.V(1).Info("Applied target")
-	return ctrl.Result{}, nil
+	return target, b.PartialSync, nil
 }
 
 func (r *NetworkInterfaceReconciler) Target(ctx context.Context, key client.ObjectKey, targetObj client.Object) error {

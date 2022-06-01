@@ -166,23 +166,21 @@ func (r *MachineReconciler) reconcile(ctx context.Context, log logr.Logger, mach
 	}
 
 	log.V(1).Info("Applying target")
-	targetMachine, err := r.applyTarget(ctx, machine, targetNamespace)
+	target, partial, err := r.applyTarget(ctx, machine, targetNamespace)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
-	if targetMachine == nil {
-		log.V(1).Info("Dependencies of target are not yet ready")
-		return ctrl.Result{}, nil
+	if target == nil {
+		log.V(1).Info("Target dependencies are not ready", "Partial", partial)
+		return ctrl.Result{Requeue: partial}, nil
 	}
-
 	log.V(1).Info("Patching status")
-	if err := r.patchStatus(ctx, machine, targetMachine.Status.State); err != nil {
+	if err := r.patchStatus(ctx, machine, target.Status.State); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	log.V(1).Info("Successfully reconciled machine")
-	return ctrl.Result{}, nil
+	log.V(1).Info("Successfully reconciled machine", "Partial", partial)
+	return ctrl.Result{Requeue: partial}, nil
 }
 
 func (r *MachineReconciler) registerImagePullSecretMutation(ctx context.Context, machine, target *computev1alpha1.Machine, b *sync.CompositeMutationBuilder) error {
@@ -403,7 +401,7 @@ func (r *MachineReconciler) registerDefaultMutation(ctx context.Context, machine
 	return nil
 }
 
-func (r *MachineReconciler) applyTarget(ctx context.Context, machine *computev1alpha1.Machine, targetNamespace string) (*computev1alpha1.Machine, error) {
+func (r *MachineReconciler) applyTarget(ctx context.Context, machine *computev1alpha1.Machine, targetNamespace string) (*computev1alpha1.Machine, bool, error) {
 	var (
 		target = &computev1alpha1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
@@ -415,27 +413,27 @@ func (r *MachineReconciler) applyTarget(ctx context.Context, machine *computev1a
 	)
 
 	if err := r.registerImagePullSecretMutation(ctx, machine, target, &b); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err := r.registerIgnitionMutation(ctx, machine, target, &b); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err := r.registerVolumesMutation(ctx, machine, target, &b); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err := r.registerNetworkInterfacesMutation(ctx, machine, target, &b); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err := r.registerDefaultMutation(ctx, machine, target, &b); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, machine, target,
 		b.Mutate(target),
 	); err != nil {
-		return nil, sync.IgnorePartialCreate(err)
+		return nil, b.PartialSync, sync.IgnorePartialCreate(err)
 	}
-	return target, nil
+	return target, b.PartialSync, nil
 }
 
 func (r *MachineReconciler) Target(ctx context.Context, key client.ObjectKey, targetObj client.Object) error {
@@ -468,9 +466,9 @@ func (r *MachineReconciler) Target(ctx context.Context, key client.ObjectKey, ta
 func (r *MachineReconciler) SetupWithManager(mgr broker.Manager) error {
 	return broker.NewControllerManagedBy(mgr, r.ClusterName).
 		FilterNoTargetNamespace().
+		WatchTargetNamespaceCreated().
 		For(&computev1alpha1.Machine{}).
 		OwnsTarget(&computev1alpha1.Machine{}).
-		WatchTargetNamespaceCreated().
 		ReferencesViaField(&corev1.Secret{}, computefields.MachineSpecSecretNames).
 		ReferencesViaField(&corev1.ConfigMap{}, computefields.MachineSpecConfigMapNames).
 		ReferencesViaField(&storagev1alpha1.VolumeClaim{}, computefields.MachineSpecVolumeClaimNames).

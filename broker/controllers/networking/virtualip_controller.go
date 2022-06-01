@@ -179,6 +179,21 @@ func (r *VirtualIPReconciler) reconcile(ctx context.Context, log logr.Logger, vi
 		return ctrl.Result{}, err
 	}
 
+	log.V(1).Info("Applying target")
+	target, partial, err := r.applyTarget(ctx, log, virtualIP, targetNamespace)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if target == nil {
+		log.V(1).Info("Target dependencies are not yet ready", "Partial", partial)
+		return ctrl.Result{Requeue: partial}, nil
+	}
+
+	log.V(1).Info("Applied target", "Partial", partial)
+	return ctrl.Result{Requeue: partial}, nil
+}
+
+func (r *VirtualIPReconciler) applyTarget(ctx context.Context, log logr.Logger, virtualIP *networkingv1alpha1.VirtualIP, targetNamespace *corev1.Namespace) (*networkingv1alpha1.VirtualIP, bool, error) {
 	var (
 		target = &networkingv1alpha1.VirtualIP{
 			ObjectMeta: metav1.ObjectMeta{
@@ -190,21 +205,19 @@ func (r *VirtualIPReconciler) reconcile(ctx context.Context, log logr.Logger, vi
 	)
 
 	if err := r.registerDefaultMutation(ctx, virtualIP, target, &b); err != nil {
-		return ctrl.Result{}, err
+		return nil, false, err
 	}
 	if err := r.registerTargetRefMutation(ctx, virtualIP, target, &b); err != nil {
-		return ctrl.Result{}, err
+		return nil, false, err
 	}
 
 	log.V(1).Info("Applying target")
 	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, virtualIP, target,
 		b.Mutate(target),
 	); err != nil {
-		return ctrl.Result{}, sync.IgnorePartialCreate(err)
+		return nil, b.PartialSync, sync.IgnorePartialCreate(err)
 	}
-
-	log.V(1).Info("Applied target")
-	return ctrl.Result{}, nil
+	return target, b.PartialSync, nil
 }
 
 func (r *VirtualIPReconciler) Target(ctx context.Context, key client.ObjectKey, targetObj client.Object) error {

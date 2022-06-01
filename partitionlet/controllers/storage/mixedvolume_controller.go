@@ -174,9 +174,13 @@ func (r *MixedVolumeReconciler) reconcile(ctx context.Context, log logr.Logger, 
 	}
 
 	log.V(1).Info("Applying target")
-	target, err := applier.ApplyTarget(ctx, volume)
-	if err != nil || target == nil {
+	target, partial, err := applier.ApplyTarget(ctx, volume)
+	if err != nil {
 		return ctrl.Result{}, err
+	}
+	if target == nil {
+		log.V(1).Info("Target dependencies are not yet ready", "Partial", partial)
+		return ctrl.Result{Requeue: partial}, nil
 	}
 
 	if managed {
@@ -192,8 +196,8 @@ func (r *MixedVolumeReconciler) reconcile(ctx context.Context, log logr.Logger, 
 		}
 	}
 
-	log.V(1).Info("Reconciled")
-	return ctrl.Result{}, nil
+	log.V(1).Info("Reconciled", "Partial", partial)
+	return ctrl.Result{Requeue: partial}, nil
 }
 
 func (r *MixedVolumeReconciler) Target(ctx context.Context, key client.ObjectKey, targetObj client.Object) error {

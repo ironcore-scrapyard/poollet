@@ -144,9 +144,13 @@ func (r *ProxyVolumeReconciler) reconcile(ctx context.Context, log logr.Logger, 
 
 	log.V(1).Info("Applying target")
 	applier := r.applierFor(volume)
-	target, err := applier.ApplyTarget(ctx, volume)
-	if err != nil || target == nil {
+	target, partial, err := applier.ApplyTarget(ctx, volume)
+	if err != nil {
 		return ctrl.Result{}, err
+	}
+	if target == nil {
+		log.V(1).Info("Target dependencies are not yet ready", "Partial", partial)
+		return ctrl.Result{Requeue: partial}, nil
 	}
 
 	log.V(1).Info("Applying access")
@@ -160,8 +164,8 @@ func (r *ProxyVolumeReconciler) reconcile(ctx context.Context, log logr.Logger, 
 		return ctrl.Result{}, err
 	}
 
-	log.V(1).Info("Reconciled")
-	return ctrl.Result{}, nil
+	log.V(1).Info("Reconciled", "Partial", partial)
+	return ctrl.Result{Requeue: partial}, nil
 }
 
 func (r *ProxyVolumeReconciler) Target(ctx context.Context, key client.ObjectKey, obj client.Object) error {

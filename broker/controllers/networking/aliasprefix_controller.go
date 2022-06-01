@@ -183,9 +183,13 @@ func (r *AliasPrefixReconciler) reconcile(ctx context.Context, log logr.Logger, 
 	}
 
 	log.V(1).Info("Applying target")
-	target, err := r.applyTarget(ctx, log, aliasPrefix, targetNamespace)
-	if err != nil || target == nil {
+	target, partial, err := r.applyTarget(ctx, log, aliasPrefix, targetNamespace)
+	if err != nil {
 		return ctrl.Result{}, err
+	}
+	if target == nil {
+		log.V(1).Info("Target dependencies are not ready", "Partial", partial)
+		return ctrl.Result{Requeue: partial}, nil
 	}
 
 	log.V(1).Info("Applying target routing")
@@ -193,11 +197,11 @@ func (r *AliasPrefixReconciler) reconcile(ctx context.Context, log logr.Logger, 
 		return ctrl.Result{}, err
 	}
 
-	log.V(1).Info("Reconciled")
-	return ctrl.Result{}, nil
+	log.V(1).Info("Reconciled", "Partial", partial)
+	return ctrl.Result{Requeue: partial}, nil
 }
 
-func (r *AliasPrefixReconciler) applyTarget(ctx context.Context, log logr.Logger, aliasPrefix *networkingv1alpha1.AliasPrefix, targetNamespace string) (*networkingv1alpha1.AliasPrefix, error) {
+func (r *AliasPrefixReconciler) applyTarget(ctx context.Context, log logr.Logger, aliasPrefix *networkingv1alpha1.AliasPrefix, targetNamespace string) (*networkingv1alpha1.AliasPrefix, bool, error) {
 	var (
 		target = &networkingv1alpha1.AliasPrefix{
 			ObjectMeta: metav1.ObjectMeta{
@@ -209,21 +213,21 @@ func (r *AliasPrefixReconciler) applyTarget(ctx context.Context, log logr.Logger
 	)
 
 	if err := r.registerDefaultMutation(ctx, aliasPrefix, target, &b); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err := r.registerNetworkRefMutation(ctx, aliasPrefix, target, &b); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	log.V(1).Info("Applying target")
 	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, aliasPrefix, target,
 		b.Mutate(target),
 	); err != nil {
-		return nil, fmt.Errorf("error applying target: %w", err)
+		return nil, b.PartialSync, sync.IgnorePartialCreate(err)
 	}
 
 	log.V(1).Info("Applied target")
-	return aliasPrefix, nil
+	return aliasPrefix, b.PartialSync, nil
 }
 
 func (r *AliasPrefixReconciler) registerAliasPrefixRoutingMutation(ctx context.Context, log logr.Logger, aliasPrefix *networkingv1alpha1.AliasPrefix, target *networkingv1alpha1.AliasPrefixRouting, b *sync.CompositeMutationBuilder) error {

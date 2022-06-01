@@ -132,12 +132,17 @@ func (r *OneWaySyncVolumeReconciler) reconcile(ctx context.Context, log logr.Log
 	}
 
 	log.V(1).Info("Applying target")
-	if _, err := r.applier().ApplyTarget(ctx, volume); err != nil {
+	target, partial, err := r.applier().ApplyTarget(ctx, volume)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
+	if target == nil {
+		log.V(1).Info("Target dependencies are not yet ready", "Partial", partial)
+		return ctrl.Result{Requeue: partial}, nil
+	}
 
-	log.V(1).Info("Reconciled")
-	return ctrl.Result{}, nil
+	log.V(1).Info("Reconciled", "Partial", partial)
+	return ctrl.Result{Requeue: partial}, nil
 }
 
 func (r *OneWaySyncVolumeReconciler) Target(ctx context.Context, key client.ObjectKey, obj client.Object) error {
