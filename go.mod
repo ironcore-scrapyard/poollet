@@ -11,10 +11,10 @@ require (
 	github.com/onmetal/onmetal-api v0.0.11
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
-	k8s.io/api v0.24.0
+	k8s.io/api v0.24.1
 	k8s.io/apiextensions-apiserver v0.24.0 // indirect
-	k8s.io/apimachinery v0.24.0
-	k8s.io/client-go v0.24.0
+	k8s.io/apimachinery v0.24.1
+	k8s.io/client-go v0.24.1
 	sigs.k8s.io/controller-runtime v0.12.2-0.20220525133844-d15de977569f
 )
 
