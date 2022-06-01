@@ -38,6 +38,7 @@ import (
 	brokercompute "github.com/onmetal/poollet/broker/controllers/compute"
 	"github.com/onmetal/poollet/broker/controllers/core"
 	brokernetworking "github.com/onmetal/poollet/broker/controllers/networking"
+	brokerstorage "github.com/onmetal/poollet/broker/controllers/storage"
 	"github.com/onmetal/poollet/broker/provider"
 	"github.com/onmetal/poollet/hash"
 	partitionletcontrollerscommon "github.com/onmetal/poollet/partitionlet/controllers/common"
@@ -281,16 +282,32 @@ func main() {
 		logErrAndExit(err, "unable to set up provider", "provider", "Volume")
 	}
 
+	if err = (&brokerstorage.VolumePoolReconciler{
+		Client:              mgr.GetClient(),
+		Target:              mgr.GetTarget().GetClient(),
+		PoolName:            volumePoolName,
+		ProviderID:          providerID,
+		InitPoolLabels:      initVolumePoolLabels,
+		InitPoolAnnotations: initVolumePoolAnnotations,
+		TargetPoolLabels:    targetVolumePoolLabels,
+		TargetPoolName:      targetVolumePoolName,
+		ClusterName:         clusterName,
+		Domain:              partitionletcontrollerscommon.Domain,
+	}).SetupWithManager(mgr); err != nil {
+		logErrAndExit(err, "unable to set up controller", "controller", "VolumePool")
+	}
+
 	if err = (&brokercompute.MachinePoolReconciler{
 		Client:              mgr.GetClient(),
 		Target:              mgr.GetTarget().GetClient(),
 		PoolName:            machinePoolName,
 		ProviderID:          providerID,
-		InitPoolLabels:      initVolumePoolLabels,
-		InitPoolAnnotations: initVolumePoolAnnotations,
+		InitPoolLabels:      initMachinePoolLabels,
+		InitPoolAnnotations: initMachinePoolAnnotations,
 		TargetPoolLabels:    targetMachinePoolLabels,
 		TargetPoolName:      targetMachinePoolName,
 		ClusterName:         clusterName,
+		Domain:              partitionletcontrollerscommon.Domain,
 	}).SetupWithManager(mgr); err != nil {
 		logErrAndExit(err, "unable to set up controller", "controller", "MachinePool")
 	}
