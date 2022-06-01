@@ -27,7 +27,6 @@ import (
 	"github.com/onmetal/poollet/broker/builder"
 	"github.com/onmetal/poollet/broker/domain"
 	brokerpredicate "github.com/onmetal/poollet/broker/predicate"
-	poollethandler "github.com/onmetal/poollet/handler"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,7 +35,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -59,6 +58,8 @@ type VolumePoolReconciler struct {
 
 func (r *VolumePoolReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
+	log = log.WithValues("namespace", "", "name", r.PoolName)
+
 	volumePool := &storagev1alpha1.VolumePool{}
 	if err := r.Get(ctx, client.ObjectKey{Name: r.PoolName}, volumePool); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -131,6 +132,8 @@ func (r *VolumePoolReconciler) targetPools(ctx context.Context) ([]storagev1alph
 			}
 			return nil, nil
 		}
+
+		return []storagev1alpha1.VolumePool{*targetPool}, nil
 	}
 
 	targetPoolList := &storagev1alpha1.VolumePoolList{}
@@ -231,31 +234,19 @@ func (r *VolumePoolReconciler) SetupWithManager(mgr broker.Manager) error {
 	}
 
 	return broker.NewControllerManagedBy(mgr, r.ClusterName).
-		For(
-			&storagev1alpha1.VolumePool{},
-			builder.WithPredicates(
-				predicate.NewPredicateFuncs(func(object client.Object) bool {
-					volumePool := object.(*storagev1alpha1.VolumePool)
-					return volumePool.Name == r.PoolName
-				}),
-			),
-		).
+		For(&storagev1alpha1.VolumePool{}).
 		Watches(
 			&source.Kind{Type: &storagev1alpha1.Volume{}},
-			&poollethandler.EnqueueStaticRequest{
-				Request: ctrl.Request{NamespacedName: client.ObjectKey{Name: r.PoolName}},
-			},
+			&handler.EnqueueRequestForObject{},
 			builder.WithPredicates(
 				storagepredicate.VolumeRunsInVolumePoolPredicate(r.PoolName),
 			),
 		).
 		WatchesTarget(
 			&source.Kind{Type: &storagev1alpha1.VolumePool{}},
-			&poollethandler.EnqueueStaticRequest{
-				Request: ctrl.Request{NamespacedName: client.ObjectKey{Name: r.PoolName}},
-			},
+			&handler.EnqueueRequestForObject{},
 			builder.WithPredicates(
-				brokerpredicate.TargetPoolPredicate(r.TargetPoolName, r.TargetPoolLabels),
+				brokerpredicate.NameLabelsPredicate(r.TargetPoolName, r.TargetPoolLabels),
 			),
 		).
 		Complete(r)

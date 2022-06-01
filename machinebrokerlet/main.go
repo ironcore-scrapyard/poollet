@@ -139,11 +139,20 @@ func main() {
 		logErrAndExit(err, "unable to load target kubeconfig")
 	}
 
+	targetCluster, err := brokercluster.New(targetCfg,
+		func(o *cluster.Options) {
+			o.Scheme = scheme
+		},
+	)
+	if err != nil {
+		logErrAndExit(err, "could not create target cluster")
+	}
+
 	if leaderElectionID == "" {
 		leaderElectionID = machinebrokerletcontrollerscommon.Domain.Subdomain(hash.FNV32A(poolName)).String()
 	}
 
-	mgr, err := broker.NewManager(cfg, broker.Options{
+	mgr, err := broker.NewManager(cfg, targetCluster, broker.Options{
 		Scheme:                  scheme,
 		MetricsBindAddress:      metricsAddr,
 		Port:                    9443,
@@ -156,35 +165,22 @@ func main() {
 		logErrAndExit(err, "unable to start manager")
 	}
 
-	targetCluster, err := brokercluster.New(targetCfg,
-		func(o *cluster.Options) {
-			o.Scheme = scheme
-		},
-	)
-	if err != nil {
-		logErrAndExit(err, "could not create target cluster")
-	}
-
-	if err := mgr.Add(targetCluster); err != nil {
-		logErrAndExit(err, "could not add target cluster to manager")
-	}
-
 	if err := storageindex.AddToIndexer(context.TODO(), mgr.GetFieldIndexer()); err != nil {
 		logErrAndExit(err, "unable to index fields", "group", "storage")
 	}
-	if err := storageindex.AddToIndexer(context.TODO(), targetCluster.GetFieldIndexer()); err != nil {
+	if err := storageindex.AddToIndexer(context.TODO(), mgr.GetTarget().GetFieldIndexer()); err != nil {
 		logErrAndExit(err, "unable to index fields", "group", "storage")
 	}
 	if err := computeindex.AddToIndexer(context.TODO(), mgr.GetFieldIndexer()); err != nil {
 		logErrAndExit(err, "unable to index fields", "group", "compute")
 	}
-	if err := computeindex.AddToIndexer(context.TODO(), targetCluster.GetFieldIndexer()); err != nil {
+	if err := computeindex.AddToIndexer(context.TODO(), mgr.GetTarget().GetFieldIndexer()); err != nil {
 		logErrAndExit(err, "unable to index fields", "group", "compute")
 	}
 	if err := networkingindex.AddToIndexer(context.TODO(), mgr.GetFieldIndexer()); err != nil {
 		logErrAndExit(err, "unable to index fields", "group", "networking")
 	}
-	if err := networkingindex.AddToIndexer(context.TODO(), targetCluster.GetFieldIndexer()); err != nil {
+	if err := networkingindex.AddToIndexer(context.TODO(), mgr.GetTarget().GetFieldIndexer()); err != nil {
 		logErrAndExit(err, "unable to index fields", "group", "networking")
 	}
 
@@ -193,8 +189,8 @@ func main() {
 	namespaceReconciler := &core.NamespaceReconciler{
 		Client:          mgr.GetClient(),
 		APIReader:       mgr.GetAPIReader(),
-		TargetClient:    targetCluster.GetClient(),
-		TargetAPIReader: targetCluster.GetAPIReader(),
+		TargetClient:    mgr.GetTarget().GetClient(),
+		TargetAPIReader: mgr.GetTarget().GetAPIReader(),
 		Scheme:          scheme,
 		NamespacePrefix: "machinebrokerlet-",
 		ClusterName:     clusterName,
@@ -213,7 +209,7 @@ func main() {
 		Provider:     prov,
 		Client:       mgr.GetBrokerClient(),
 		APIReader:    mgr.GetAPIReader(),
-		TargetClient: targetCluster.GetBrokerClient(),
+		TargetClient: mgr.GetTarget().GetBrokerClient(),
 		Scheme:       scheme,
 		ClusterName:  clusterName,
 		Domain:       machinebrokerletcontrollerscommon.Domain,
@@ -231,7 +227,7 @@ func main() {
 		Provider:     prov,
 		Client:       mgr.GetBrokerClient(),
 		APIReader:    mgr.GetAPIReader(),
-		TargetClient: targetCluster.GetBrokerClient(),
+		TargetClient: mgr.GetTarget().GetBrokerClient(),
 		Scheme:       scheme,
 		ClusterName:  clusterName,
 		Domain:       machinebrokerletcontrollerscommon.Domain,
@@ -248,7 +244,7 @@ func main() {
 		Provider:         prov,
 		Client:           mgr.GetClient(),
 		APIReader:        mgr.GetAPIReader(),
-		TargetClient:     targetCluster.GetClient(),
+		TargetClient:     mgr.GetTarget().GetClient(),
 		TargetPoolName:   targetVolumePoolName,
 		TargetPoolLabels: targetVolumePoolLabels,
 		MachinePoolName:  poolName,
@@ -263,7 +259,7 @@ func main() {
 
 	if err = (&brokercompute.MachinePoolReconciler{
 		Client:              mgr.GetClient(),
-		Target:              mgr.GetTarget().GetClient(),
+		TargetClient:        mgr.GetTarget().GetClient(),
 		PoolName:            poolName,
 		ProviderID:          providerID,
 		InitPoolLabels:      initPoolLabels,

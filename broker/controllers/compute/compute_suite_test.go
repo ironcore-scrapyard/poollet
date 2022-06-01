@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package storage_test
+package compute_test
 
 import (
 	"context"
@@ -20,14 +20,14 @@ import (
 	"time"
 
 	"github.com/onmetal/controller-utils/modutils"
-	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	"github.com/onmetal/onmetal-api/envtestutils"
 	"github.com/onmetal/onmetal-api/envtestutils/apiserver"
-	storageindex "github.com/onmetal/poollet/api/storage/index"
+	computeindex "github.com/onmetal/poollet/api/compute/index"
 	"github.com/onmetal/poollet/broker"
 	brokercluster "github.com/onmetal/poollet/broker/cluster"
 	brokercontrollerscommon "github.com/onmetal/poollet/broker/controllers/common"
-	"github.com/onmetal/poollet/broker/controllers/storage"
+	"github.com/onmetal/poollet/broker/controllers/compute"
 	"github.com/onmetal/poollet/broker/provider"
 	"github.com/onmetal/poollet/internal/apiserverbin"
 	. "github.com/onsi/ginkgo/v2"
@@ -45,9 +45,9 @@ import (
 )
 
 const (
-	poolName    = "test-pool"
-	providerID  = "test://test-pool"
-	clusterName = "test"
+	poolName      = "test-pool"
+	providerID    = "test://test-pool"
+	subdomainName = "test"
 )
 
 var (
@@ -80,7 +80,7 @@ const (
 	apiServiceTimeout    = 5 * time.Minute
 )
 
-func TestStorage(t *testing.T) {
+func TestCompute(t *testing.T) {
 	_, reporterConfig := GinkgoConfiguration()
 	reporterConfig.SlowSpecThreshold = slowSpecThreshold
 	SetDefaultConsistentlyPollingInterval(pollingInterval)
@@ -89,7 +89,7 @@ func TestStorage(t *testing.T) {
 	SetDefaultConsistentlyDuration(consistentlyDuration)
 
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Storage Suite")
+	RunSpecs(t, "Compute Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -111,7 +111,7 @@ var _ = BeforeSuite(func() {
 
 	DeferCleanup(envtestutils.StopWithExtensions, testEnv, testEnvExt)
 
-	Expect(storagev1alpha1.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(computev1alpha1.AddToScheme(scheme.Scheme)).To(Succeed())
 
 	// Init package-level k8sClient
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
@@ -168,19 +168,18 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Setup field indexers
-		Expect(storageindex.AddToIndexer(mgrCtx, k8sManager.GetFieldIndexer())).To(Succeed())
-		Expect(storageindex.AddToIndexer(mgrCtx, k8sManager.GetTarget().GetFieldIndexer())).To(Succeed())
+		Expect(computeindex.AddToIndexer(mgrCtx, k8sManager.GetFieldIndexer())).To(Succeed())
+		Expect(computeindex.AddToIndexer(mgrCtx, k8sManager.GetTarget().GetFieldIndexer())).To(Succeed())
 
-		Expect((&storage.VolumePoolReconciler{
+		Expect((&compute.MachinePoolReconciler{
 			Client:              k8sManager.GetClient(),
-			Target:              k8sManager.GetClient(),
+			TargetClient:        k8sManager.GetClient(),
 			PoolName:            poolName,
 			ProviderID:          providerID,
 			InitPoolLabels:      initPoolLabels,
 			InitPoolAnnotations: initPoolAnnotations,
 			TargetPoolLabels:    targetPoolSelector,
-			TargetPoolName:      "",
-			ClusterName:         clusterName,
+			ClusterName:         subdomainName,
 			Domain:              domain,
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
@@ -193,7 +192,7 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 	AfterEach(func() {
 		cancel()
 		Expect(k8sClient.Delete(ctx, ns)).To(Succeed(), "failed to delete test namespace")
-		Expect(k8sClient.DeleteAllOf(ctx, &storagev1alpha1.VolumePool{})).To(Succeed())
+		Expect(k8sClient.DeleteAllOf(ctx, &computev1alpha1.MachinePool{})).To(Succeed())
 	})
 
 	return ns, prov

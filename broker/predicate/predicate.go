@@ -27,13 +27,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-func TargetPoolPredicate(targetPoolName string, targetPoolSelector map[string]string) predicate.Predicate {
+func NameLabelsPredicate(expectedName string, expectedLabels map[string]string) predicate.Predicate {
 	return predicate.NewPredicateFuncs(func(obj client.Object) bool {
-		if targetPoolName != "" && obj.GetName() != targetPoolName {
+		if expectedName != "" && obj.GetName() != expectedName {
 			return false
 		}
 
-		return labels.SelectorFromValidatedSet(targetPoolSelector).Matches(labels.Set(obj.GetLabels()))
+		return labels.SelectorFromValidatedSet(expectedLabels).Matches(labels.Set(obj.GetLabels()))
 	})
 }
 

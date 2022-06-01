@@ -26,6 +26,7 @@ import (
 	storageindex "github.com/onmetal/poollet/api/storage/index"
 	storagefields "github.com/onmetal/poollet/api/storage/index/fields"
 	"github.com/onmetal/poollet/broker"
+	brokercluster "github.com/onmetal/poollet/broker/cluster"
 	"github.com/onmetal/poollet/broker/controllers/core"
 	"github.com/onmetal/poollet/broker/provider"
 	"github.com/onmetal/poollet/internal/apiserverbin"
@@ -38,6 +39,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	. "sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -148,7 +150,10 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 		}
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed(), "failed to create test namespace")
 
-		k8sManager, err := broker.NewManager(cfg, broker.Options{
+		targetCluster, err := brokercluster.New(cfg, func(opts *cluster.Options) { opts.Scheme = scheme.Scheme })
+		Expect(err).NotTo(HaveOccurred())
+
+		k8sManager, err := broker.NewManager(cfg, targetCluster, broker.Options{
 			Scheme:             scheme.Scheme,
 			Host:               "127.0.0.1",
 			MetricsBindAddress: "0",
@@ -157,6 +162,7 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 
 		// Setup field indexers
 		Expect(storageindex.AddToIndexer(mgrCtx, k8sManager.GetFieldIndexer())).To(Succeed())
+		Expect(storageindex.AddToIndexer(mgrCtx, k8sManager.GetTarget().GetFieldIndexer())).To(Succeed())
 
 		// Setup provider
 		*prov = *provider.NewRegistry(scheme.Scheme)

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/onmetal/poollet/broker"
+	brokercluster "github.com/onmetal/poollet/broker/cluster"
 	brokercontrollerscommon "github.com/onmetal/poollet/broker/controllers/common"
 	"github.com/onmetal/poollet/broker/controllers/core"
 	brokermeta "github.com/onmetal/poollet/broker/meta"
@@ -36,6 +37,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	. "sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -97,15 +99,15 @@ var _ = BeforeSuite(func() {
 	SetClient(k8sClient)
 })
 
-func SetupFooToTypeField(ctx context.Context, mgr broker.Manager, referredType client.Object) (string, error) {
-	referredGVK, err := apiutil.GVKForObject(referredType, mgr.GetScheme())
+func SetupFooToTypeField(ctx context.Context, cluster brokercluster.Cluster, referredType client.Object) (string, error) {
+	referredGVK, err := apiutil.GVKForObject(referredType, cluster.GetScheme())
 	if err != nil {
 		return "", err
 	}
 
 	field := strings.ToLower(referredGVK.GroupVersion().String()) + "-name"
 
-	return field, mgr.GetFieldIndexer().IndexField(ctx, &testdatav1.Foo{}, field, func(object client.Object) []string {
+	return field, cluster.GetFieldIndexer().IndexField(ctx, &testdatav1.Foo{}, field, func(object client.Object) []string {
 		foo := object.(*testdatav1.Foo)
 		ref := foo.Spec.Ref
 		if ref == nil {
@@ -142,7 +144,10 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 		}
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed(), "failed to create test namespace")
 
-		k8sManager, err := broker.NewManager(cfg, broker.Options{
+		targetCluster, err := brokercluster.New(cfg, func(opts *cluster.Options) { opts.Scheme = scheme.Scheme })
+		Expect(err).NotTo(HaveOccurred())
+
+		k8sManager, err := broker.NewManager(cfg, targetCluster, broker.Options{
 			Scheme:             scheme.Scheme,
 			Host:               "127.0.0.1",
 			MetricsBindAddress: "0",

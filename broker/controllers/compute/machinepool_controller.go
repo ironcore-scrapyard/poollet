@@ -27,7 +27,6 @@ import (
 	"github.com/onmetal/poollet/broker/builder"
 	"github.com/onmetal/poollet/broker/domain"
 	"github.com/onmetal/poollet/broker/predicate"
-	poollethandler "github.com/onmetal/poollet/handler"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,13 +34,14 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 type MachinePoolReconciler struct {
 	client.Client
 
-	Target client.Client
+	TargetClient client.Client
 
 	PoolName            string
 	ProviderID          string
@@ -57,6 +57,8 @@ type MachinePoolReconciler struct {
 
 func (r *MachinePoolReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
+	log = log.WithValues("namespace", "", "name", r.PoolName)
+
 	machinePool := &computev1alpha1.MachinePool{}
 	if err := r.Get(ctx, client.ObjectKey{Name: r.PoolName}, machinePool); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -123,16 +125,18 @@ func (r *MachinePoolReconciler) targetPools(ctx context.Context) ([]computev1alp
 	if r.TargetPoolName != "" {
 		targetPool := &computev1alpha1.MachinePool{}
 		targetPoolKey := client.ObjectKey{Name: r.TargetPoolName}
-		if err := r.Target.Get(ctx, targetPoolKey, targetPool); err != nil {
+		if err := r.TargetClient.Get(ctx, targetPoolKey, targetPool); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return nil, fmt.Errorf("error getting target pool %s: %w", r.TargetPoolName, err)
 			}
 			return nil, nil
 		}
+
+		return []computev1alpha1.MachinePool{*targetPool}, nil
 	}
 
 	targetPoolList := &computev1alpha1.MachinePoolList{}
-	if err := r.Target.List(ctx, targetPoolList,
+	if err := r.TargetClient.List(ctx, targetPoolList,
 		client.MatchingLabels(r.TargetPoolLabels),
 	); err != nil {
 		return nil, fmt.Errorf("error listing target pools: %w", err)
@@ -142,15 +146,15 @@ func (r *MachinePoolReconciler) targetPools(ctx context.Context) ([]computev1alp
 }
 
 func (r *MachinePoolReconciler) accumulatePools(ctx context.Context) ([]corev1.LocalObjectReference, error) {
-	pools, err := r.targetPools(ctx)
+	targetPools, err := r.targetPools(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	availableMachineClassNames := sets.NewString()
-	for _, targetPool := range pools {
-		for _, ref := range targetPool.Status.AvailableMachineClasses {
-			availableMachineClassNames.Insert(ref.Name)
+	for _, targetPool := range targetPools {
+		for _, availableMachineClass := range targetPool.Status.AvailableMachineClasses {
+			availableMachineClassNames.Insert(availableMachineClass.Name)
 		}
 	}
 
@@ -225,20 +229,16 @@ func (r *MachinePoolReconciler) SetupWithManager(mgr broker.Manager) error {
 		For(&computev1alpha1.MachinePool{}).
 		Watches(
 			&source.Kind{Type: &computev1alpha1.Machine{}},
-			&poollethandler.EnqueueStaticRequest{
-				Request: ctrl.Request{NamespacedName: client.ObjectKey{Name: r.PoolName}},
-			},
+			&handler.EnqueueRequestForObject{},
 			builder.WithPredicates(
 				computepredicate.MachineRunsInMachinePoolPredicate(r.PoolName),
 			),
 		).
 		WatchesTarget(
 			&source.Kind{Type: &computev1alpha1.MachinePool{}},
-			&poollethandler.EnqueueStaticRequest{
-				Request: ctrl.Request{NamespacedName: client.ObjectKey{Name: r.PoolName}},
-			},
+			&handler.EnqueueRequestForObject{},
 			builder.WithPredicates(
-				predicate.TargetPoolPredicate(r.TargetPoolName, r.TargetPoolLabels),
+				predicate.NameLabelsPredicate(r.TargetPoolName, r.TargetPoolLabels),
 			),
 		).
 		Complete(r)

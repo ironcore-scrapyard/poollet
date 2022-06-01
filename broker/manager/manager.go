@@ -217,8 +217,7 @@ type Options struct {
 	// Controller contains global configuration options for controllers
 	// registered within this manager.
 	// +optional
-	Controller     v1alpha1.ControllerConfigurationSpec
-	TargetProvider func(brokercluster.Cluster) (brokercluster.Cluster, error)
+	Controller v1alpha1.ControllerConfigurationSpec
 }
 
 func (o *Options) options() manager.Options {
@@ -344,14 +343,6 @@ func (b *brokerManager) GetTarget() brokercluster.Cluster {
 	return b.target
 }
 
-func setOptionsDefaults(opts *Options) {
-	if opts.TargetProvider == nil {
-		opts.TargetProvider = func(c brokercluster.Cluster) (brokercluster.Cluster, error) {
-			return c, nil
-		}
-	}
-}
-
 func (b *brokerManager) setManagerFields(i interface{}) error {
 	if _, err := inject.InjectorInto(b.SetFields, i); err != nil {
 		return err
@@ -409,8 +400,10 @@ func getStopChan(mgr manager.Manager) (<-chan struct{}, error) {
 	return s, nil
 }
 
-func New(config *rest.Config, opts Options) (Manager, error) {
-	setOptionsDefaults(&opts)
+func New(config *rest.Config, targetCluster brokercluster.Cluster, opts Options) (Manager, error) {
+	if targetCluster == nil {
+		return nil, fmt.Errorf("must specify target cluster")
+	}
 
 	mgr, err := manager.New(config, opts.options())
 	if err != nil {
@@ -424,15 +417,14 @@ func New(config *rest.Config, opts Options) (Manager, error) {
 
 	self := brokercluster.WrapCluster(mgr, brokerclient.NewFieldExtractorRegistry(mgr.GetScheme()))
 
-	target, err := opts.TargetProvider(self)
-	if err != nil {
+	if err := mgr.Add(targetCluster); err != nil {
 		return nil, err
 	}
 
 	return &brokerManager{
 		manager: mgr,
 		cluster: self,
-		target:  target,
+		target:  targetCluster,
 		stop:    stop,
 	}, nil
 }
