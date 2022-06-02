@@ -135,7 +135,6 @@ func (r *MixedVolumeReconciler) applierFor(volume *storagev1alpha1.Volume) (appl
 			TargetPoolLabels: r.TargetPoolLabels,
 			ClusterName:      r.ClusterName,
 			TargetClient:     r.TargetClient,
-			Unclaimable:      true,
 		}, true, nil
 	}
 
