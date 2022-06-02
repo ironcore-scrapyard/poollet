@@ -57,14 +57,3 @@ func VolumeStatusSecretNamesField(ctx context.Context, fieldIndexer client.Field
 		return []string{""}
 	})
 }
-
-func VolumeClaimVolumeRefNameField(ctx context.Context, fieldIndexer client.FieldIndexer) error {
-	return fieldIndexer.IndexField(ctx, &storagev1alpha1.VolumeClaim{}, fields.VolumeClaimVolumeRefName, func(obj client.Object) []string {
-		volumeClaim := obj.(*storagev1alpha1.VolumeClaim)
-		volumeRef := volumeClaim.Spec.VolumeRef
-		if volumeRef == nil {
-			return []string{""}
-		}
-		return []string{volumeRef.Name}
-	})
-}

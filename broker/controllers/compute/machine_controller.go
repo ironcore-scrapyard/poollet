@@ -24,6 +24,7 @@ import (
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	networkingv1alpha1 "github.com/onmetal/onmetal-api/apis/networking/v1alpha1"
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+	"github.com/onmetal/onmetal-api/controllers/shared"
 	computehelper "github.com/onmetal/poollet/api/compute/helper"
 	computefields "github.com/onmetal/poollet/api/compute/index/fields"
 	"github.com/onmetal/poollet/broker"
@@ -236,41 +237,51 @@ func (r *MachineReconciler) registerIgnitionMutation(ctx context.Context, machin
 	return nil
 }
 
-func (r *MachineReconciler) targetVolumeSource(ctx context.Context, machine *computev1alpha1.Machine, src *computev1alpha1.VolumeSource) (*computev1alpha1.VolumeSource, bool, error) {
+func (r *MachineReconciler) findMachineVolumeStatus(machine *computev1alpha1.Machine, machineVolumeName string) (computev1alpha1.VolumeStatus, bool) {
+	for _, status := range machine.Status.Volumes {
+		if status.Name == machineVolumeName {
+			return status, true
+		}
+	}
+	return computev1alpha1.VolumeStatus{}, false
+}
+
+func (r *MachineReconciler) machineVolumeName(machine *computev1alpha1.Machine, machineVolume *computev1alpha1.Volume) string {
+	if machineVolume.VolumeRef != nil {
+		return machineVolume.VolumeRef.Name
+	}
+
+	return shared.MachineEphemeralVolumeName(machine.Name, machineVolume.Name)
+}
+
+func (r *MachineReconciler) targetVolumeSource(ctx context.Context, machine *computev1alpha1.Machine, machineVolume *computev1alpha1.Volume) (*computev1alpha1.VolumeSource, bool, error) {
 	switch {
-	case src.EmptyDisk != nil:
+	case machineVolume.EmptyDisk != nil:
 		return &computev1alpha1.VolumeSource{
-			EmptyDisk: src.EmptyDisk.DeepCopy(),
+			EmptyDisk: machineVolume.EmptyDisk.DeepCopy(),
 		}, true, nil
-	case src.VolumeClaimRef != nil:
-		volumeClaim := &storagev1alpha1.VolumeClaim{}
-		volumeClaimKey := client.ObjectKey{Namespace: machine.Namespace, Name: src.VolumeClaimRef.Name}
-		if err := r.Get(ctx, volumeClaimKey, volumeClaim); err != nil {
-			if !apierrors.IsNotFound(err) {
-				return nil, false, fmt.Errorf("error getting volume claim %s: %w", src.VolumeClaimRef.Name, err)
-			}
+	case machineVolume.VolumeRef != nil || machineVolume.Ephemeral != nil:
+		status, ok := r.findMachineVolumeStatus(machine, machineVolume.Name)
+		if !ok || status.Phase != computev1alpha1.VolumePhaseBound {
 			return nil, false, nil
 		}
 
-		if volumeClaim.Status.Phase != storagev1alpha1.VolumeClaimBound || volumeClaim.Spec.VolumeRef == nil {
-			return nil, false, nil
-		}
-
-		targetVolumeClaim := &storagev1alpha1.VolumeClaim{}
-		if err := r.Provider.Target(ctx, volumeClaimKey, targetVolumeClaim); err != nil {
+		volumeKey := client.ObjectKey{Namespace: machine.Namespace, Name: r.machineVolumeName(machine, machineVolume)}
+		targetVolume := &storagev1alpha1.Volume{}
+		if err := r.Provider.Target(ctx, volumeKey, targetVolume); err != nil {
 			if !brokererrors.IsNotSyncedOrNotFound(err) {
-				return nil, false, fmt.Errorf("error getting volume claim %s target: %w", volumeClaimKey, err)
+				return nil, false, fmt.Errorf("error getting volume %s target: %w", volumeKey, err)
 			}
 			return nil, false, nil
 		}
 
 		return &computev1alpha1.VolumeSource{
-			VolumeClaimRef: &corev1.LocalObjectReference{
-				Name: targetVolumeClaim.Name,
+			VolumeRef: &corev1.LocalObjectReference{
+				Name: targetVolume.Name,
 			},
 		}, true, nil
 	default:
-		return nil, false, fmt.Errorf("unrecognized volume source %#v", src)
+		return nil, false, fmt.Errorf("unrecognized volume %#v", machineVolume)
 	}
 }
 
@@ -283,18 +294,18 @@ func (r *MachineReconciler) registerVolumesMutation(ctx context.Context, machine
 		targetVolumes  []computev1alpha1.Volume
 	)
 
-	for _, volume := range machine.Spec.Volumes {
-		src, ok, err := r.targetVolumeSource(ctx, machine, &volume.VolumeSource)
+	for _, machineVolume := range machine.Spec.Volumes {
+		src, ok, err := r.targetVolumeSource(ctx, machine, &machineVolume)
 		if err != nil {
-			return fmt.Errorf("[volume %s] %w", volume.Name, err)
+			return fmt.Errorf("[volume %s] %w", machineVolume.Name, err)
 		}
 
 		if !ok {
 			b.PartialSync = true
-			unhandledNames.Insert(volume.Name)
+			unhandledNames.Insert(machineVolume.Name)
 		}
 		if src != nil {
-			targetVolumes = append(targetVolumes, computev1alpha1.Volume{Name: volume.Name, VolumeSource: *src})
+			targetVolumes = append(targetVolumes, computev1alpha1.Volume{Name: machineVolume.Name, VolumeSource: *src})
 		}
 	}
 
@@ -310,33 +321,34 @@ func (r *MachineReconciler) registerVolumesMutation(ctx context.Context, machine
 	return nil
 }
 
-func (r *MachineReconciler) targetNetworkInterfaceSource(ctx context.Context, machine, target *computev1alpha1.Machine, nicName string, src *computev1alpha1.NetworkInterfaceSource) (*computev1alpha1.NetworkInterfaceSource, bool, error) {
+func (r *MachineReconciler) findMachineNetworkInterfaceStatus(machine *computev1alpha1.Machine, machineNicName string) (computev1alpha1.NetworkInterfaceStatus, bool) {
+	for _, status := range machine.Status.NetworkInterfaces {
+		if status.Name == machineNicName {
+			return status, true
+		}
+	}
+	return computev1alpha1.NetworkInterfaceStatus{}, false
+}
+
+func (r *MachineReconciler) machineNetworkInterfaceName(machine *computev1alpha1.Machine, machineNic *computev1alpha1.NetworkInterface) string {
+	if machineNic.NetworkInterfaceRef != nil {
+		return machineNic.NetworkInterfaceRef.Name
+	}
+
+	return shared.MachineEphemeralNetworkInterfaceName(machine.Name, machineNic.Name)
+}
+
+func (r *MachineReconciler) targetNetworkInterfaceSource(ctx context.Context, machine, target *computev1alpha1.Machine, machineNic *computev1alpha1.NetworkInterface) (*computev1alpha1.NetworkInterfaceSource, bool, error) {
 	switch {
-	case src.NetworkInterfaceRef != nil || src.Ephemeral != nil:
-		var actualNicName string
-		if src.NetworkInterfaceRef != nil {
-			actualNicName = src.NetworkInterfaceRef.Name
-		} else {
-			actualNicName = fmt.Sprintf("%s-%s", machine.Name, nicName)
-		}
-
-		nic := &networkingv1alpha1.NetworkInterface{}
-		nicKey := client.ObjectKey{Namespace: machine.Namespace, Name: actualNicName}
-		if err := r.Get(ctx, nicKey, nic); err != nil {
-			if !apierrors.IsNotFound(err) {
-				return nil, false, fmt.Errorf("error getting nic %s: %w", nicKey, err)
-			}
+	case machineNic.NetworkInterfaceRef != nil || machineNic.Ephemeral != nil:
+		status, ok := r.findMachineNetworkInterfaceStatus(machine, machineNic.Name)
+		if !ok || status.Phase != computev1alpha1.NetworkInterfacePhaseBound {
 			return nil, false, nil
 		}
 
-		if nic.Status.Phase != networkingv1alpha1.NetworkInterfacePhaseBound ||
-			nic.Spec.MachineRef == nil ||
-			nic.Spec.MachineRef.Name != machine.Name {
-			return nil, false, nil
-		}
-
+		nicKey := client.ObjectKey{Namespace: machine.Namespace, Name: r.machineNetworkInterfaceName(machine, machineNic)}
 		targetNic := &networkingv1alpha1.NetworkInterface{}
-		if err := r.Provider.Target(ctx, client.ObjectKeyFromObject(nic), targetNic); err != nil {
+		if err := r.Provider.Target(ctx, nicKey, targetNic); err != nil {
 			if !brokererrors.IsNotSyncedOrNotFound(err) {
 				return nil, false, fmt.Errorf("error getting network interface %s target: %w", nicKey, err)
 			}
@@ -348,7 +360,7 @@ func (r *MachineReconciler) targetNetworkInterfaceSource(ctx context.Context, ma
 			},
 		}, true, nil
 	default:
-		return nil, false, fmt.Errorf("unrecognized network interface source %#v", src)
+		return nil, false, fmt.Errorf("unrecognized network interface %#v", machineNic)
 	}
 }
 
@@ -360,18 +372,18 @@ func (r *MachineReconciler) registerNetworkInterfacesMutation(ctx context.Contex
 		unhandledNames = sets.NewString()
 		targetNics     []computev1alpha1.NetworkInterface
 	)
-	for _, nic := range machine.Spec.NetworkInterfaces {
-		src, ok, err := r.targetNetworkInterfaceSource(ctx, machine, target, nic.Name, &nic.NetworkInterfaceSource)
+	for _, machineNic := range machine.Spec.NetworkInterfaces {
+		src, ok, err := r.targetNetworkInterfaceSource(ctx, machine, target, &machineNic)
 		if err != nil {
-			return fmt.Errorf("[network interface %s] %w", nic.Name, err)
+			return fmt.Errorf("[network interface %s] %w", machineNic.Name, err)
 		}
 
 		if !ok {
 			b.PartialSync = true
-			unhandledNames.Insert(nic.Name)
+			unhandledNames.Insert(machineNic.Name)
 		}
 		if src != nil {
-			targetNics = append(targetNics, computev1alpha1.NetworkInterface{Name: nic.Name, NetworkInterfaceSource: *src})
+			targetNics = append(targetNics, computev1alpha1.NetworkInterface{Name: machineNic.Name, NetworkInterfaceSource: *src})
 		}
 	}
 
@@ -471,11 +483,9 @@ func (r *MachineReconciler) SetupWithManager(mgr broker.Manager) error {
 		OwnsTarget(&computev1alpha1.Machine{}).
 		ReferencesViaField(&corev1.Secret{}, computefields.MachineSpecSecretNames).
 		ReferencesViaField(&corev1.ConfigMap{}, computefields.MachineSpecConfigMapNames).
-		ReferencesViaField(&storagev1alpha1.VolumeClaim{}, computefields.MachineSpecVolumeClaimNames).
 		ReferencesViaField(&networkingv1alpha1.NetworkInterface{}, computefields.MachineSpecNetworkInterfaceNames).
 		ReferencesTargetViaField(&corev1.Secret{}, computefields.MachineSpecSecretNames).
 		ReferencesTargetViaField(&corev1.ConfigMap{}, computefields.MachineSpecConfigMapNames).
-		ReferencesTargetViaField(&storagev1alpha1.VolumeClaim{}, computefields.MachineSpecVolumeClaimNames).
 		ReferencesTargetViaField(&networkingv1alpha1.NetworkInterface{}, computefields.MachineSpecNetworkInterfaceNames).
 		Complete(r)
 }

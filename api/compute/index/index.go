@@ -34,12 +34,12 @@ func MachineSpecMachinePoolRefNameField(ctx context.Context, fieldIndexer client
 	})
 }
 
-func MachineVolumeClaimNamesField(ctx context.Context, fieldIndexer client.FieldIndexer) error {
-	return fieldIndexer.IndexField(ctx, &computev1alpha1.Machine{}, fields.MachineSpecVolumeClaimNames, func(obj client.Object) []string {
+func MachineVolumeNamesField(ctx context.Context, fieldIndexer client.FieldIndexer) error {
+	return fieldIndexer.IndexField(ctx, &computev1alpha1.Machine{}, fields.MachineSpecVolumeNames, func(obj client.Object) []string {
 		machine := obj.(*computev1alpha1.Machine)
 
-		if names := helper.MachineSpecVolumeClaimNames(machine); len(names) > 0 {
-			return names
+		if names := helper.MachineSpecVolumeNames(machine); len(names) > 0 {
+			return names.UnsortedList()
 		}
 		return []string{""}
 	})
@@ -49,7 +49,7 @@ func MachineNetworkInterfaceNamesField(ctx context.Context, fieldIndexer client.
 	return fieldIndexer.IndexField(ctx, &computev1alpha1.Machine{}, fields.MachineSpecNetworkInterfaceNames, func(obj client.Object) []string {
 		machine := obj.(*computev1alpha1.Machine)
 		if names := helper.MachineSpecNetworkInterfaceNames(machine); len(names) > 0 {
-			return names
+			return names.UnsortedList()
 		}
 		return []string{""}
 	})
@@ -59,7 +59,7 @@ func MachineSecretNamesField(ctx context.Context, fieldIndexer client.FieldIndex
 	return fieldIndexer.IndexField(ctx, &computev1alpha1.Machine{}, fields.MachineSpecSecretNames, func(obj client.Object) []string {
 		machine := obj.(*computev1alpha1.Machine)
 		if names := helper.MachineSpecSecretNames(machine); len(names) > 0 {
-			return names
+			return names.UnsortedList()
 		}
 		return []string{""}
 	})
@@ -69,7 +69,7 @@ func MachineConfigMapNamesField(ctx context.Context, fieldIndexer client.FieldIn
 	return fieldIndexer.IndexField(ctx, &computev1alpha1.Machine{}, fields.MachineSpecConfigMapNames, func(obj client.Object) []string {
 		machine := obj.(*computev1alpha1.Machine)
 		if names := helper.MachineSpecConfigMapNames(machine); len(names) > 0 {
-			return names
+			return names.UnsortedList()
 		}
 		return []string{""}
 	})

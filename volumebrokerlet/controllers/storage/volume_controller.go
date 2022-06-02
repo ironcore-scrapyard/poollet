@@ -109,6 +109,7 @@ func (r *VolumeReconciler) delete(ctx context.Context, log logr.Logger, volume *
 
 func (r *VolumeReconciler) applier() *storage.SyncVolumeApplier {
 	return &storage.SyncVolumeApplier{
+		Unclaimable:      true,
 		Provider:         r.Provider,
 		TargetPoolName:   r.TargetPoolName,
 		TargetPoolLabels: r.TargetPoolLabels,

@@ -23,10 +23,10 @@ import (
 	commonv1alpha1 "github.com/onmetal/onmetal-api/apis/common/v1alpha1"
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	networkingv1alpha1 "github.com/onmetal/onmetal-api/apis/networking/v1alpha1"
+	computehelper "github.com/onmetal/poollet/api/compute/helper"
 	computepredicate "github.com/onmetal/poollet/api/compute/predicate"
 	networkingctrl "github.com/onmetal/poollet/api/networking/controller"
 	"github.com/onmetal/poollet/api/networking/helper"
-	networkingfields "github.com/onmetal/poollet/api/networking/index/fields"
 	"github.com/onmetal/poollet/broker"
 	"github.com/onmetal/poollet/broker/builder"
 	brokerclient "github.com/onmetal/poollet/broker/client"
@@ -40,6 +40,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 type NetworkInterfaceReconciler struct {
@@ -315,10 +318,38 @@ func (r *NetworkInterfaceReconciler) SetupWithManager(mgr broker.Manager) error 
 		FilterNoTargetNamespace().
 		For(&networkingv1alpha1.NetworkInterface{}).
 		OwnsTarget(&networkingv1alpha1.NetworkInterface{}).
-		ReferencesViaField(
-			&computev1alpha1.Machine{},
-			networkingfields.NetworkInterfaceMachineNames,
+		Watches(
+			&source.Kind{Type: &computev1alpha1.Machine{}},
+			r.enqueueByMachineNetworkInterfaceNames(),
 			builder.WithPredicates(computepredicate.MachineRunsInMachinePoolPredicate(r.MachinePoolName)),
 		).
+		Watches(
+			&source.Kind{Type: &networkingv1alpha1.VirtualIP{}},
+			r.enqueueByVirtualIPTargetName(),
+		).
 		Complete(r)
+}
+
+func (r *NetworkInterfaceReconciler) enqueueByVirtualIPTargetName() handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+		virtualIP := obj.(*networkingv1alpha1.VirtualIP)
+		targetRef := virtualIP.Spec.TargetRef
+		if targetRef == nil {
+			return nil
+		}
+		return []reconcile.Request{{NamespacedName: client.ObjectKey{Namespace: virtualIP.Namespace, Name: virtualIP.Name}}}
+	})
+}
+
+func (r *NetworkInterfaceReconciler) enqueueByMachineNetworkInterfaceNames() handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+		machine := obj.(*computev1alpha1.Machine)
+
+		nicNames := computehelper.MachineSpecNetworkInterfaceNames(machine)
+		res := make([]reconcile.Request, 0, len(nicNames))
+		for nicName := range nicNames {
+			res = append(res, reconcile.Request{NamespacedName: client.ObjectKey{Namespace: machine.Namespace, Name: nicName}})
+		}
+		return res
+	})
 }

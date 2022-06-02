@@ -16,14 +16,12 @@ package controller
 
 import (
 	"context"
-	"fmt"
 
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+	"github.com/onmetal/onmetal-api/controllers/shared"
 	computeindexclient "github.com/onmetal/poollet/api/compute/client/index"
 	computehelper "github.com/onmetal/poollet/api/compute/helper"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -43,7 +41,7 @@ func IsVolumeUsedLive(ctx context.Context, r client.Reader, volume *storagev1alp
 
 	matchingMachine := computehelper.FindMachine(machineList.Items,
 		computehelper.ByMachineRunningInMachinePool(machinePoolName),
-		computehelper.ByMachineSpecReferencingVolumeClaim(claimRef.Name),
+		computehelper.ByMachineSpecReferencingVolume(claimRef.Name),
 	)
 	return matchingMachine != nil, nil
 }
@@ -54,8 +52,8 @@ func IsVolumeUsedCached(ctx context.Context, c client.Client, volume *storagev1a
 		return false, nil
 	}
 
-	volumeClaimKey := client.ObjectKey{Namespace: volume.Namespace, Name: claimRef.Name}
-	machines, err := computeindexclient.ListMachinesReferencingVolumeClaimKey(ctx, c, volumeClaimKey)
+	volumeKey := client.ObjectKey{Namespace: volume.Namespace, Name: claimRef.Name}
+	machines, err := computeindexclient.ListMachinesReferencingVolumeKey(ctx, c, volumeKey)
 	if err != nil {
 		return false, err
 	}
@@ -76,64 +74,11 @@ func IsVolumeUsedCachedOrLive(ctx context.Context, r client.Reader, c client.Cli
 	return false, nil
 }
 
-func IsVolumeClaimUsedCached(ctx context.Context, c client.Client, volumeClaim *storagev1alpha1.VolumeClaim, machinePoolName string) (bool, error) {
-	if volumeClaim.Spec.VolumeRef == nil || volumeClaim.Status.Phase != storagev1alpha1.VolumeClaimBound {
-		return false, nil
+func VolumeReconcileRequestsFromMachine(machine *computev1alpha1.Machine) []reconcile.Request {
+	volumeNames := shared.MachineSpecVolumeNames(machine)
+	res := make([]reconcile.Request, 0, len(volumeNames))
+	for volumeName := range volumeNames {
+		res = append(res, reconcile.Request{NamespacedName: client.ObjectKey{Namespace: machine.Namespace, Name: volumeName}})
 	}
-
-	volumeClaimKey := client.ObjectKeyFromObject(volumeClaim)
-	machines, err := computeindexclient.ListMachinesReferencingVolumeClaimKey(ctx, c, volumeClaimKey)
-	if err != nil {
-		return false, err
-	}
-
-	matchingMachine := computehelper.FindMachine(machines,
-		computehelper.ByMachineRunningInMachinePool(machinePoolName),
-	)
-	return matchingMachine != nil, nil
-}
-
-func GetVolumeClaimVolumeReconcileRequests(ctx context.Context, c client.Client, volumeClaim *storagev1alpha1.VolumeClaim, machinePoolName string) ([]reconcile.Request, error) {
-	ok, err := IsVolumeClaimUsedCached(ctx, c, volumeClaim, machinePoolName)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, nil
-	}
-	return []ctrl.Request{{NamespacedName: client.ObjectKey{Namespace: volumeClaim.Namespace, Name: volumeClaim.Spec.VolumeRef.Name}}}, nil
-}
-
-func GetBoundMachineVolumeClaims(ctx context.Context, c client.Client, machine *computev1alpha1.Machine) ([]*storagev1alpha1.VolumeClaim, error) {
-	var res []*storagev1alpha1.VolumeClaim
-	for _, volumeClaimName := range computehelper.MachineSpecVolumeClaimNames(machine) {
-		volumeClaim := &storagev1alpha1.VolumeClaim{}
-		volumeClaimKey := client.ObjectKey{Namespace: machine.Namespace, Name: volumeClaimName}
-		if err := c.Get(ctx, volumeClaimKey, volumeClaim); err != nil {
-			if !apierrors.IsNotFound(err) {
-				return nil, fmt.Errorf("error getting machine volume claim %s: %w", volumeClaimKey, err)
-			}
-			continue
-		}
-
-		if volumeClaim.Spec.VolumeRef == nil || volumeClaim.Status.Phase != storagev1alpha1.VolumeClaimBound {
-			continue
-		}
-
-		res = append(res, volumeClaim)
-	}
-	return res, nil
-}
-
-func GetMachineVolumeReconcileRequests(ctx context.Context, c client.Client, machine *computev1alpha1.Machine) ([]reconcile.Request, error) {
-	volumeClaims, err := GetBoundMachineVolumeClaims(ctx, c, machine)
-	if err != nil {
-		return nil, err
-	}
-
-	res := make([]reconcile.Request, 0, len(volumeClaims))
-	for _, volumeClaim := range volumeClaims {
-		res = append(res, reconcile.Request{NamespacedName: client.ObjectKey{Namespace: machine.Namespace, Name: volumeClaim.Spec.VolumeRef.Name}})
-	}
-	return res, nil
+	return res
 }

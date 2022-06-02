@@ -25,7 +25,6 @@ var (
 
 func init() {
 	builder.Register(
-		NetworkInterfaceMachineNamesField,
 		NetworkInterfaceNetworkNameField,
 		NetworkInterfaceVirtualIPNameField,
 		AliasPrefixRoutingNetworkInterfaceNamesField,

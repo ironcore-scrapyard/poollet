@@ -21,6 +21,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/onmetal/controller-utils/clientutils"
 	commonv1alpha1 "github.com/onmetal/onmetal-api/apis/common/v1alpha1"
+	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
 	brokerclient "github.com/onmetal/poollet/broker/client"
 	"github.com/onmetal/poollet/broker/domain"
@@ -142,6 +143,8 @@ type SyncVolumeApplier struct {
 	TargetPoolLabels map[string]string
 	ClusterName      string
 
+	Unclaimable bool
+
 	TargetClient client.Client
 }
 
@@ -169,22 +172,30 @@ func (r *SyncVolumeApplier) registerImagePullSecretMutation(ctx context.Context,
 	return nil
 }
 
-func (r *SyncVolumeApplier) registerVolumeClaimMutation(ctx context.Context, volume, target *storagev1alpha1.Volume, b *sync.CompositeMutationBuilder) error {
-	volumeClaimRef := volume.Spec.ClaimRef
-	if volumeClaimRef == nil {
+func (r *SyncVolumeApplier) registerClaimMutation(ctx context.Context, volume, target *storagev1alpha1.Volume, b *sync.CompositeMutationBuilder) error {
+	if r.Unclaimable {
+		b.Add(func() {
+			target.Spec.ClaimRef = nil
+			target.Spec.Unclaimable = true
+		})
+		return nil
+	}
+
+	claimRef := volume.Spec.ClaimRef
+	if claimRef == nil {
 		b.Add(func() {
 			target.Spec.ClaimRef = nil
 		})
 		return nil
 	}
 
-	volumeClaimKey := client.ObjectKey{Namespace: volume.Namespace, Name: volumeClaimRef.Name}
-	targetVolumeClaim := &storagev1alpha1.VolumeClaim{}
-	if err := r.Provider.Target(ctx, volumeClaimKey, targetVolumeClaim); err != nil {
+	machineKey := client.ObjectKey{Namespace: volume.Namespace, Name: claimRef.Name}
+	targetMachine := &computev1alpha1.Machine{}
+	if err := r.Provider.Target(ctx, machineKey, targetMachine); err != nil {
 		if !brokererrors.IsNotSyncedOrNotFound(err) {
-			return fmt.Errorf("error getting target volume claim %s target key: %w", volumeClaimKey, err)
+			return fmt.Errorf("error getting machine %s target: %w", machineKey, err)
 		}
-		// Since we don't depend on a volume claim to be synced yet, we just set it to empty.
+		// Since we don't depend on a machine to be synced yet, we just set it to empty.
 		b.Add(func() {
 			target.Spec.ClaimRef = nil
 		})
@@ -193,8 +204,8 @@ func (r *SyncVolumeApplier) registerVolumeClaimMutation(ctx context.Context, vol
 
 	b.Add(func() {
 		target.Spec.ClaimRef = &commonv1alpha1.LocalUIDReference{
-			Name: targetVolumeClaim.Name,
-			UID:  targetVolumeClaim.UID,
+			Name: targetMachine.Name,
+			UID:  targetMachine.UID,
 		}
 	})
 	return nil
@@ -234,7 +245,7 @@ func (r *SyncVolumeApplier) ApplyTarget(ctx context.Context, volume *storagev1al
 	if err := r.registerDefaultMutation(ctx, volume, target, &b); err != nil {
 		return nil, false, err
 	}
-	if err := r.registerVolumeClaimMutation(ctx, volume, target, &b); err != nil {
+	if err := r.registerClaimMutation(ctx, volume, target, &b); err != nil {
 		return nil, false, err
 	}
 

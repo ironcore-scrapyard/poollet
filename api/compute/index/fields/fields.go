@@ -17,7 +17,7 @@ package fields
 const (
 	MachineSpecMachinePoolRefName = ".spec.machinePoolRef.name"
 
-	MachineSpecVolumeClaimNames = "machine-spec-volumeclaim-names"
+	MachineSpecVolumeNames = "machine-spec-volume-names"
 
 	MachineSpecNetworkInterfaceNames = "machine-spec-networkinterface-names"
 

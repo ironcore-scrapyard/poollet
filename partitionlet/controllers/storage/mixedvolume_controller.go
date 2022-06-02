@@ -135,6 +135,7 @@ func (r *MixedVolumeReconciler) applierFor(volume *storagev1alpha1.Volume) (appl
 			TargetPoolLabels: r.TargetPoolLabels,
 			ClusterName:      r.ClusterName,
 			TargetClient:     r.TargetClient,
+			Unclaimable:      true,
 		}, true, nil
 	}
 
@@ -223,36 +224,16 @@ func (r *MixedVolumeReconciler) Target(ctx context.Context, key client.ObjectKey
 }
 
 func (r *MixedVolumeReconciler) SetupWithManager(mgr broker.Manager) error {
-	log := ctrl.Log.WithName("volume").WithName("setup")
-	ctx := ctrl.LoggerInto(context.TODO(), log)
-
 	return broker.NewControllerManagedBy(mgr, r.ClusterName).
 		FilterNoTargetNamespace().
 		WatchTargetNamespaceCreated().
 		For(&storagev1alpha1.Volume{}).
 		OwnsTarget(&storagev1alpha1.Volume{}).
 		Watches(
-			&source.Kind{Type: &storagev1alpha1.VolumeClaim{}},
-			handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []ctrl.Request {
-				volumeClaim := obj.(*storagev1alpha1.VolumeClaim)
-				reqs, err := storagectrl.GetVolumeClaimVolumeReconcileRequests(ctx, r.Client, volumeClaim, r.MachinePoolName)
-				if err != nil {
-					log.Error(err, "Error getting volume claim volume reconcile requests")
-					return nil
-				}
-				return reqs
-			}),
-		).
-		Watches(
 			&source.Kind{Type: &computev1alpha1.Machine{}},
 			handler.EnqueueRequestsFromMapFunc(func(object client.Object) []ctrl.Request {
 				machine := object.(*computev1alpha1.Machine)
-				reqs, err := storagectrl.GetMachineVolumeReconcileRequests(ctx, r.Client, machine)
-				if err != nil {
-					log.Error(err, "Error getting machine volume reconcile requests")
-					return nil
-				}
-				return reqs
+				return storagectrl.VolumeReconcileRequestsFromMachine(machine)
 			}),
 			builder.WithPredicates(computepredicate.MachineRunsInMachinePoolPredicate(r.MachinePoolName)),
 		).

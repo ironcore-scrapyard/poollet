@@ -115,6 +115,7 @@ func (r *ProxyVolumeReconciler) applierFor(volume *storagev1alpha1.Volume) stora
 			TargetPoolLabels: r.TargetPoolLabels,
 			ClusterName:      r.ClusterName,
 			TargetClient:     r.TargetClient,
+			Unclaimable:      true,
 		}
 	}
 	return &storage.ProxyVolumeApplier{

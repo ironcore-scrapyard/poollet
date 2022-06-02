@@ -26,7 +26,7 @@ var (
 func init() {
 	builder.Register(
 		MachineSpecMachinePoolRefNameField,
-		MachineVolumeClaimNamesField,
+		MachineVolumeNamesField,
 		MachineNetworkInterfaceNamesField,
 		MachineSecretNamesField,
 		MachineConfigMapNamesField,

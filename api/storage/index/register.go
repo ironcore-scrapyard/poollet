@@ -28,6 +28,5 @@ func init() {
 		VolumeSpecVolumePoolRefNameField,
 		VolumeSpecSecretNamesField,
 		VolumeStatusSecretNamesField,
-		VolumeClaimVolumeRefNameField,
 	)
 }

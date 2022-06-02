@@ -15,8 +15,6 @@
 package fields
 
 const (
-	NetworkInterfaceMachineNames = "network-interface-machine-names"
-
 	NetworkInterfaceSpecNetworkRefName = ".spec.networkRef.name"
 
 	NetworkInterfaceVirtualIPName = "network-interface-virtual-ip-name"

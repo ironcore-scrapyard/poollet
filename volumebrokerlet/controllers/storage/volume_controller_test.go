@@ -69,6 +69,7 @@ var _ = Describe("VolumeController", func() {
 				HaveField("Spec", Equal(storagev1alpha1.VolumeSpec{
 					VolumeClassRef:     corev1.LocalObjectReference{Name: "my-class"},
 					VolumePoolSelector: targetPoolSelector,
+					Unclaimable:        true,
 					Resources: map[corev1.ResourceName]resource.Quantity{
 						"storage": resource.MustParse("1Gi"),
 					},

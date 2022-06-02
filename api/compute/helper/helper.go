@@ -17,6 +17,7 @@ package helper
 import (
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	"github.com/onmetal/onmetal-api/controllers/shared"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func MachineRunsInMachinePool(machine *computev1alpha1.Machine, poolName string) bool {
@@ -77,52 +78,26 @@ func ByMachineRunningInMachinePool(poolName string) MachinePredicate {
 	}
 }
 
-func MachineSpecVolumeClaimNames(machine *computev1alpha1.Machine) []string {
-	var names []string
-	for _, volume := range machine.Spec.Volumes {
-		switch {
-		case volume.VolumeClaimRef != nil:
-			names = append(names, volume.VolumeClaimRef.Name)
-		}
-	}
-	return names
+func MachineSpecVolumeNames(machine *computev1alpha1.Machine) sets.String {
+	return shared.MachineSpecVolumeNames(machine)
 }
 
-func MachineSpecReferencesVolumeClaimName(machine *computev1alpha1.Machine, volumeClaimName string) bool {
-	for _, name := range MachineSpecVolumeClaimNames(machine) {
-		if name == volumeClaimName {
-			return true
-		}
-	}
-	return false
+func MachineSpecReferencesVolumeName(machine *computev1alpha1.Machine, volumeName string) bool {
+	return MachineSpecVolumeNames(machine).Has(volumeName)
 }
 
-func ByMachineSpecReferencingVolumeClaim(volumeClaimName string) MachinePredicate {
+func ByMachineSpecReferencingVolume(volumeName string) MachinePredicate {
 	return func(machine *computev1alpha1.Machine) bool {
-		return MachineSpecReferencesVolumeClaimName(machine, volumeClaimName)
+		return MachineSpecReferencesVolumeName(machine, volumeName)
 	}
 }
 
-func MachineSpecNetworkInterfaceNames(machine *computev1alpha1.Machine) []string {
-	var names []string
-	for _, nic := range machine.Spec.NetworkInterfaces {
-		switch {
-		case nic.NetworkInterfaceRef != nil:
-			names = append(names, nic.NetworkInterfaceRef.Name)
-		case nic.Ephemeral != nil:
-			names = append(names, shared.MachineEphemeralNetworkInterfaceName(machine.Name, nic.Name))
-		}
-	}
-	return names
+func MachineSpecNetworkInterfaceNames(machine *computev1alpha1.Machine) sets.String {
+	return shared.MachineSpecNetworkInterfaceNames(machine)
 }
 
 func MachineSpecReferencesNetworkInterfaceName(machine *computev1alpha1.Machine, nicName string) bool {
-	for _, name := range MachineSpecNetworkInterfaceNames(machine) {
-		if name == nicName {
-			return true
-		}
-	}
-	return false
+	return MachineSpecNetworkInterfaceNames(machine).Has(nicName)
 }
 
 func ByMachineSpecReferencingNetworkInterface(nicName string) MachinePredicate {
@@ -131,21 +106,21 @@ func ByMachineSpecReferencingNetworkInterface(nicName string) MachinePredicate {
 	}
 }
 
-func MachineSpecSecretNames(machine *computev1alpha1.Machine) []string {
-	var names []string
+func MachineSpecSecretNames(machine *computev1alpha1.Machine) sets.String {
+	names := sets.NewString()
 
 	if imagePullSecretRef := machine.Spec.ImagePullSecretRef; imagePullSecretRef != nil {
-		names = append(names, imagePullSecretRef.Name)
+		names.Insert(imagePullSecretRef.Name)
 	}
 
 	return names
 }
 
-func MachineSpecConfigMapNames(machine *computev1alpha1.Machine) []string {
-	var names []string
+func MachineSpecConfigMapNames(machine *computev1alpha1.Machine) sets.String {
+	names := sets.NewString()
 
 	if ignitionRef := machine.Spec.IgnitionRef; ignitionRef != nil {
-		names = append(names, ignitionRef.Name)
+		names.Insert(ignitionRef.Name)
 	}
 
 	return names

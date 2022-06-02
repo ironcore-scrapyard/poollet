@@ -23,16 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func NetworkInterfaceMachineNamesField(ctx context.Context, c client.FieldIndexer) error {
-	return c.IndexField(ctx, &networkingv1alpha1.NetworkInterface{}, fields.NetworkInterfaceMachineNames, func(obj client.Object) []string {
-		nic := obj.(*networkingv1alpha1.NetworkInterface)
-		if names := helper.NetworkInterfaceMachineNames(nic); len(names) > 0 {
-			return names
-		}
-		return []string{""}
-	})
-}
-
 func NetworkInterfaceNetworkNameField(ctx context.Context, c client.FieldIndexer) error {
 	return c.IndexField(ctx, &networkingv1alpha1.NetworkInterface{}, fields.NetworkInterfaceSpecNetworkRefName, func(obj client.Object) []string {
 		nic := obj.(*networkingv1alpha1.NetworkInterface)

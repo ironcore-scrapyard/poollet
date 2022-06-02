@@ -20,6 +20,4 @@ const (
 	VolumeSpecSecretNamesField = "volume-spec-secret-names"
 
 	VolumeStatusSecretNamesField = "volume-status-secret-names"
-
-	VolumeClaimVolumeRefName = ".spec.volumeRef.name"
 )
