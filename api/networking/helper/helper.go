@@ -16,14 +16,6 @@ package helper
 
 import networkingv1alpha1 "github.com/onmetal/onmetal-api/apis/networking/v1alpha1"
 
-func NetworkInterfaceMachineNames(nic *networkingv1alpha1.NetworkInterface) []string {
-	var names []string
-	if machineRef := nic.Spec.MachineRef; machineRef != nil {
-		names = append(names, machineRef.Name)
-	}
-	return names
-}
-
 func NetworkInterfaceReferencesNetworkName(nic *networkingv1alpha1.NetworkInterface, networkName string) bool {
 	return nic.Spec.NetworkRef.Name == networkName
 }

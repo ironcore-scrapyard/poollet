@@ -20,7 +20,6 @@ import (
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
 	"github.com/onmetal/onmetal-api/controllers/shared"
-	computeindexclient "github.com/onmetal/poollet/api/compute/client/index"
 	computehelper "github.com/onmetal/poollet/api/compute/helper"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -32,18 +31,16 @@ func IsVolumeUsedLive(ctx context.Context, r client.Reader, volume *storagev1alp
 		return false, nil
 	}
 
-	machineList := &computev1alpha1.MachineList{}
-	if err := r.List(ctx, machineList,
-		client.InNamespace(volume.Namespace),
-	); err != nil {
-		return false, err
+	machine := &computev1alpha1.Machine{}
+	machineKey := client.ObjectKey{Namespace: volume.Namespace, Name: claimRef.Name}
+	if err := r.Get(ctx, machineKey, machine); err != nil {
+		return false, client.IgnoreNotFound(err)
 	}
 
-	matchingMachine := computehelper.FindMachine(machineList.Items,
-		computehelper.ByMachineRunningInMachinePool(machinePoolName),
-		computehelper.ByMachineSpecReferencingVolume(claimRef.Name),
-	)
-	return matchingMachine != nil, nil
+	return computehelper.MachineRunsInMachinePool(machine, machinePoolName) &&
+			claimRef.UID == machine.UID &&
+			computehelper.MachineSpecVolumeNames(machine).Has(volume.Name),
+		nil
 }
 
 func IsVolumeUsedCached(ctx context.Context, c client.Client, volume *storagev1alpha1.Volume, machinePoolName string) (bool, error) {
@@ -52,16 +49,16 @@ func IsVolumeUsedCached(ctx context.Context, c client.Client, volume *storagev1a
 		return false, nil
 	}
 
-	volumeKey := client.ObjectKey{Namespace: volume.Namespace, Name: claimRef.Name}
-	machines, err := computeindexclient.ListMachinesReferencingVolumeKey(ctx, c, volumeKey)
-	if err != nil {
-		return false, err
+	machine := &computev1alpha1.Machine{}
+	machineKey := client.ObjectKey{Namespace: volume.Namespace, Name: claimRef.Name}
+	if err := c.Get(ctx, machineKey, machine); err != nil {
+		return false, client.IgnoreNotFound(err)
 	}
 
-	matchingMachine := computehelper.FindMachine(machines,
-		computehelper.ByMachineRunningInMachinePool(machinePoolName),
-	)
-	return matchingMachine != nil, nil
+	return computehelper.MachineRunsInMachinePool(machine, machinePoolName) &&
+			claimRef.UID == machine.UID &&
+			computehelper.MachineSpecVolumeNames(machine).Has(volume.Name),
+		nil
 }
 
 func IsVolumeUsedCachedOrLive(ctx context.Context, r client.Reader, c client.Client, volume *storagev1alpha1.Volume, machinePoolName string) (bool, error) {

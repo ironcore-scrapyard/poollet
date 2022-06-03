@@ -20,7 +20,6 @@ import (
 
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	networkingv1alpha1 "github.com/onmetal/onmetal-api/apis/networking/v1alpha1"
-	computeindexclient "github.com/onmetal/poollet/api/compute/client/index"
 	computehelper "github.com/onmetal/poollet/api/compute/helper"
 	networkingindexclient "github.com/onmetal/poollet/api/networking/client/index"
 	networkinghelper "github.com/onmetal/poollet/api/networking/helper"
@@ -29,30 +28,39 @@ import (
 )
 
 func IsNetworkInterfaceUsedCached(ctx context.Context, c client.Client, nic *networkingv1alpha1.NetworkInterface, machinePoolName string) (bool, error) {
-	machines, err := computeindexclient.ListMachinesReferencingNetworkInterfaceKey(ctx, c, client.ObjectKeyFromObject(nic))
-	if err != nil {
-		return false, err
+	machineRef := nic.Spec.MachineRef
+	if machineRef == nil {
+		return false, nil
 	}
 
-	matchingMachine := computehelper.FilterMachines(machines,
-		computehelper.ByMachineRunningInMachinePool(machinePoolName),
-	)
-	return matchingMachine != nil, nil
+	machine := &computev1alpha1.Machine{}
+	machineKey := client.ObjectKey{Namespace: nic.Namespace, Name: machineRef.Name}
+	if err := c.Get(ctx, machineKey, machine); err != nil {
+		return false, client.IgnoreNotFound(err)
+	}
+
+	return computehelper.MachineRunsInMachinePool(machine, machinePoolName) &&
+			machineRef.UID == machine.UID &&
+			computehelper.MachineSpecNetworkInterfaceNames(machine).Has(nic.Name),
+		nil
 }
 
 func IsNetworkInterfaceUsedLive(ctx context.Context, r client.Reader, nic *networkingv1alpha1.NetworkInterface, machinePoolName string) (bool, error) {
-	machineList := &computev1alpha1.MachineList{}
-	if err := r.List(ctx, machineList,
-		client.InNamespace(nic.Namespace),
-	); err != nil {
-		return false, err
+	machineRef := nic.Spec.MachineRef
+	if machineRef == nil {
+		return false, nil
 	}
 
-	matchingMachine := computehelper.FindMachine(machineList.Items,
-		computehelper.ByMachineRunningInMachinePool(machinePoolName),
-		computehelper.ByMachineSpecReferencingNetworkInterface(nic.Name),
-	)
-	return matchingMachine != nil, nil
+	machine := &computev1alpha1.Machine{}
+	machineKey := client.ObjectKey{Namespace: nic.Namespace, Name: machineRef.Name}
+	if err := r.Get(ctx, machineKey, machine); err != nil {
+		return false, client.IgnoreNotFound(err)
+	}
+
+	return computehelper.MachineRunsInMachinePool(machine, machinePoolName) &&
+			machineRef.UID == machine.UID &&
+			computehelper.MachineSpecNetworkInterfaceNames(machine).Has(nic.Name),
+		nil
 }
 
 func IsNetworkInterfaceUsedCachedOrLive(ctx context.Context, r client.Reader, c client.Client, nic *networkingv1alpha1.NetworkInterface, machinePoolName string) (bool, error) {
@@ -166,37 +174,33 @@ func IsNetworkUsedCachedOrLive(ctx context.Context, r client.Reader, c client.Cl
 }
 
 func IsVirtualIPUsedCached(ctx context.Context, c client.Client, virtualIP *networkingv1alpha1.VirtualIP, machinePoolName string) (bool, error) {
-	nics, err := networkingindexclient.ListNetworkInterfacesReferencingNetworkKey(ctx, c, client.ObjectKeyFromObject(virtualIP))
-	if err != nil {
-		return false, err
+	targetRef := virtualIP.Spec.TargetRef
+	if targetRef == nil {
+		return false, nil
 	}
 
-	for _, nic := range nics {
-		if ok, err := IsNetworkInterfaceUsedCached(ctx, c, &nic, machinePoolName); err != nil || ok {
-			return ok, err
-		}
+	nic := &networkingv1alpha1.NetworkInterface{}
+	nicKey := client.ObjectKey{Namespace: virtualIP.Namespace, Name: targetRef.Name}
+	if err := c.Get(ctx, nicKey, nic); err != nil {
+		return false, client.IgnoreNotFound(err)
 	}
-	return false, nil
+
+	return IsNetworkInterfaceUsedCached(ctx, c, nic, machinePoolName)
 }
 
 func IsVirtualIPUsedLive(ctx context.Context, r client.Reader, virtualIP *networkingv1alpha1.VirtualIP, machinePoolName string) (bool, error) {
-	nicList := &networkingv1alpha1.NetworkInterfaceList{}
-	if err := r.List(ctx, nicList,
-		client.InNamespace(virtualIP.Namespace),
-	); err != nil {
-		return false, err
+	targetRef := virtualIP.Spec.TargetRef
+	if targetRef == nil {
+		return false, nil
 	}
 
-	for _, nic := range nicList.Items {
-		if networkinghelper.NetworkInterfaceVirtualIPName(&nic) != virtualIP.Name {
-			continue
-		}
-
-		if ok, err := IsNetworkInterfaceUsedLive(ctx, r, &nic, machinePoolName); err != nil || ok {
-			return ok, err
-		}
+	nic := &networkingv1alpha1.NetworkInterface{}
+	nicKey := client.ObjectKey{Namespace: virtualIP.Namespace, Name: targetRef.Name}
+	if err := r.Get(ctx, nicKey, nic); err != nil {
+		return false, client.IgnoreNotFound(err)
 	}
-	return false, nil
+
+	return IsNetworkInterfaceUsedLive(ctx, r, nic, machinePoolName)
 }
 
 func IsVirtualIPUsedCachedOrLive(ctx context.Context, r client.Reader, c client.Client, virtualIP *networkingv1alpha1.VirtualIP, machinePoolName string) (bool, error) {

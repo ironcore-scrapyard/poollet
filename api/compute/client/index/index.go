@@ -35,31 +35,3 @@ func ListMachinesRunningInMachinePool(ctx context.Context, c client.Client, pool
 
 	return machineList.Items, nil
 }
-
-func ListMachinesReferencingVolumeKey(ctx context.Context, c client.Client, volumeKey client.ObjectKey) ([]computev1alpha1.Machine, error) {
-	machineList := &computev1alpha1.MachineList{}
-	if err := c.List(ctx, machineList,
-		client.InNamespace(volumeKey.Namespace),
-		client.MatchingFields{
-			fields.MachineSpecVolumeNames: volumeKey.Name,
-		},
-	); err != nil {
-		return nil, fmt.Errorf("error listing machines running in referencing volume %s: %w", volumeKey, err)
-	}
-
-	return machineList.Items, nil
-}
-
-func ListMachinesReferencingNetworkInterfaceKey(ctx context.Context, c client.Client, nicKey client.ObjectKey) ([]computev1alpha1.Machine, error) {
-	machineList := &computev1alpha1.MachineList{}
-	if err := c.List(ctx, machineList,
-		client.InNamespace(nicKey.Namespace),
-		client.MatchingFields{
-			fields.MachineSpecNetworkInterfaceNames: nicKey.Name,
-		},
-	); err != nil {
-		return nil, fmt.Errorf("error listing machines running in referencing network interface %s: %w", nicKey, err)
-	}
-
-	return machineList.Items, nil
-}
