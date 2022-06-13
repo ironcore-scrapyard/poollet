@@ -114,7 +114,7 @@ func main() {
 	flag.StringToStringVar(&targetVolumePoolLabels, "target-volume-pool-labels", nil, "Labels to select the target volume pool to schedule volumes on.")
 
 	flag.DurationVar(&namespaceResyncPeriod, "namespace-resync-period", 10*time.Second, "Time to resync namespaces in.")
-	flag.StringVar(&clusterName, "cluster-name", "", "Name of the source cluster. Used for cross-cluster owner references / finalizers.")
+	flag.StringVar(&clusterName, "cluster-name", "", "Name of the source cluster. Used for cross-cluster owner references.")
 
 	opts := zap.Options{
 		Development: true,
@@ -194,6 +194,7 @@ func main() {
 		Scheme:          scheme,
 		NamespacePrefix: "machinebrokerlet-",
 		ClusterName:     clusterName,
+		PoolName:        poolName,
 		Domain:          machinebrokerletcontrollerscommon.Domain,
 		ResyncPeriod:    namespaceResyncPeriod,
 	}
@@ -212,6 +213,7 @@ func main() {
 		TargetClient: mgr.GetTarget().GetBrokerClient(),
 		Scheme:       scheme,
 		ClusterName:  clusterName,
+		PoolName:     poolName,
 		Domain:       machinebrokerletcontrollerscommon.Domain,
 	}
 	secretReconciler.Dependent(&storagev1alpha1.Volume{}, storagefields.VolumeSpecSecretNamesField)
@@ -230,6 +232,7 @@ func main() {
 		TargetClient: mgr.GetTarget().GetBrokerClient(),
 		Scheme:       scheme,
 		ClusterName:  clusterName,
+		PoolName:     poolName,
 		Domain:       machinebrokerletcontrollerscommon.Domain,
 	}
 	configMapReconciler.Dependent(&computev1alpha1.Machine{}, computefields.MachineSpecConfigMapNames, computepredicate.MachineRunsInMachinePoolPredicate(poolName))

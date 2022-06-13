@@ -51,7 +51,7 @@ type NetworkReconciler struct {
 }
 
 func (r *NetworkReconciler) domain() domain.Domain {
-	return r.Domain.Subdomain(r.ClusterName)
+	return r.Domain.Subdomain(r.MachinePoolName)
 }
 
 func (r *NetworkReconciler) finalizer() string {
@@ -126,12 +126,12 @@ func (r *NetworkReconciler) reconcile(ctx context.Context, log logr.Logger, netw
 	log.V(1).Info("Reconcile")
 
 	log.V(1).Info("Determining target namespace")
-	targetNamespace := &corev1.Namespace{}
-	if err := r.Provider.Target(ctx, client.ObjectKey{Name: network.Namespace}, targetNamespace); err != nil {
+	targetNamespace, err := provider.TargetNamespaceFor(ctx, r.Provider, network)
+	if err != nil {
 		return ctrl.Result{}, brokererrors.IgnoreNotSynced(err)
 	}
 
-	log = log.WithValues("TargetNamespace", targetNamespace.Name)
+	log = log.WithValues("TargetNamespace", targetNamespace)
 	log.V(1).Info("Determined target namespace")
 
 	log.V(1).Info("Ensuring finalizer")
@@ -142,7 +142,7 @@ func (r *NetworkReconciler) reconcile(ctx context.Context, log logr.Logger, netw
 
 	target := &networkingv1alpha1.Network{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: targetNamespace.Name,
+			Namespace: targetNamespace,
 			Name:      network.Name,
 		},
 	}

@@ -64,7 +64,7 @@ func (r *OneWaySyncVolumeReconciler) Reconcile(ctx context.Context, req ctrl.Req
 }
 
 func (r *OneWaySyncVolumeReconciler) domain() domain.Domain {
-	return machinebrokerletcontrollerscommon.Domain.Subdomain(r.ClusterName)
+	return machinebrokerletcontrollerscommon.Domain.Subdomain(r.MachinePoolName)
 }
 
 func (r *OneWaySyncVolumeReconciler) finalizer() string {

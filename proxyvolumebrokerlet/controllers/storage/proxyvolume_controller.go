@@ -61,7 +61,7 @@ func (r *ProxyVolumeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 }
 
 func (r *ProxyVolumeReconciler) domain() domain.Domain {
-	return proxyvolumebrokerletcontrollerscommon.Domain.Subdomain(r.ClusterName)
+	return proxyvolumebrokerletcontrollerscommon.Domain.Subdomain(r.PoolName)
 }
 
 func (r *ProxyVolumeReconciler) finalizer() string {

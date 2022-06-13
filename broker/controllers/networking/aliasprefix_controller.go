@@ -59,7 +59,7 @@ type AliasPrefixReconciler struct {
 }
 
 func (r *AliasPrefixReconciler) domain() domain.Domain {
-	return r.Domain.Subdomain(r.ClusterName)
+	return r.Domain.Subdomain(r.MachinePoolName)
 }
 
 func (r *AliasPrefixReconciler) finalizer() string {
@@ -99,18 +99,18 @@ func (r *AliasPrefixReconciler) delete(ctx context.Context, log logr.Logger, ali
 	log.V(1).Info("Delete")
 
 	log.V(1).Info("Determining target namespace")
-	targetNamespace := &corev1.Namespace{}
-	if err := r.Provider.Target(ctx, client.ObjectKey{Name: aliasPrefix.Namespace}, targetNamespace); err != nil {
+	targetNamespace, err := provider.TargetNamespaceFor(ctx, r.Provider, aliasPrefix)
+	if err != nil {
 		return ctrl.Result{}, brokererrors.IgnoreNotSynced(err)
 	}
 
-	log = log.WithValues("TargetNamespace", targetNamespace.Name)
+	log = log.WithValues("TargetNamespace", targetNamespace)
 	log.V(1).Info("Determined target namespace")
 
 	log.V(1).Info("Deleting target if exists")
 	existed, err := clientutils.DeleteIfExists(ctx, r.TargetClient, &networkingv1alpha1.AliasPrefix{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: targetNamespace.Name,
+			Namespace: targetNamespace,
 			Name:      aliasPrefix.Name,
 		},
 	})

@@ -51,7 +51,7 @@ type VirtualIPReconciler struct {
 }
 
 func (r *VirtualIPReconciler) domain() domain.Domain {
-	return r.Domain.Subdomain(r.ClusterName)
+	return r.Domain.Subdomain(r.MachinePoolName)
 }
 
 func (r *VirtualIPReconciler) finalizer() string {
@@ -165,12 +165,12 @@ func (r *VirtualIPReconciler) reconcile(ctx context.Context, log logr.Logger, vi
 	log.V(1).Info("Reconcile")
 
 	log.V(1).Info("Determining target namespace")
-	targetNamespace := &corev1.Namespace{}
-	if err := r.Provider.Target(ctx, client.ObjectKey{Name: virtualIP.Namespace}, targetNamespace); err != nil {
+	targetNamespace, err := provider.TargetNamespaceFor(ctx, r.Provider, virtualIP)
+	if err != nil {
 		return ctrl.Result{}, brokererrors.IgnoreNotSynced(err)
 	}
 
-	log = log.WithValues("TargetNamespace", targetNamespace.Name)
+	log = log.WithValues("TargetNamespace", targetNamespace)
 	log.V(1).Info("Determined target namespace")
 
 	log.V(1).Info("Ensuring finalizer")
@@ -193,11 +193,11 @@ func (r *VirtualIPReconciler) reconcile(ctx context.Context, log logr.Logger, vi
 	return ctrl.Result{Requeue: partial}, nil
 }
 
-func (r *VirtualIPReconciler) applyTarget(ctx context.Context, log logr.Logger, virtualIP *networkingv1alpha1.VirtualIP, targetNamespace *corev1.Namespace) (*networkingv1alpha1.VirtualIP, bool, error) {
+func (r *VirtualIPReconciler) applyTarget(ctx context.Context, log logr.Logger, virtualIP *networkingv1alpha1.VirtualIP, targetNamespace string) (*networkingv1alpha1.VirtualIP, bool, error) {
 	var (
 		target = &networkingv1alpha1.VirtualIP{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: targetNamespace.Name,
+				Namespace: targetNamespace,
 				Name:      virtualIP.Name,
 			},
 		}

@@ -171,6 +171,7 @@ func main() {
 		Scheme:          scheme,
 		NamespacePrefix: "proxyvolumebrokerlet-",
 		ClusterName:     clusterName,
+		PoolName:        poolName,
 		Domain:          proxyvolumebrokerletcontrollerscommon.Domain,
 		ResyncPeriod:    namespaceResyncPeriod,
 	}
@@ -189,6 +190,7 @@ func main() {
 		TargetClient: mgr.GetTarget().GetBrokerClient(),
 		Scheme:       scheme,
 		ClusterName:  clusterName,
+		PoolName:     poolName,
 		Domain:       proxyvolumebrokerletcontrollerscommon.Domain,
 	}
 	secretReconciler.Dependent(&storagev1alpha1.Volume{}, storagefields.VolumeSpecSecretNamesField, storagepredicate.VolumeRunsInVolumePoolPredicate(poolName))
@@ -202,13 +204,13 @@ func main() {
 	if err = (&brokerstorage.VolumePoolReconciler{
 		Client:              mgr.GetClient(),
 		Target:              mgr.GetTarget().GetClient(),
-		PoolName:            poolName,
 		ProviderID:          providerID,
 		InitPoolLabels:      initPoolLabels,
 		InitPoolAnnotations: initPoolAnnotations,
 		TargetPoolLabels:    targetPoolLabels,
 		TargetPoolName:      targetPoolName,
 		ClusterName:         clusterName,
+		PoolName:            poolName,
 		Domain:              proxyvolumebrokerletcontrollerscommon.Domain,
 	}).SetupWithManager(mgr); err != nil {
 		logErrAndExit(err, "unable to set up controller", "controller", "VolumePool")

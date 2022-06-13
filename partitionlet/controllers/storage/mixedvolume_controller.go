@@ -47,8 +47,7 @@ type MixedVolumeReconciler struct {
 	APIReader    client.Reader
 	TargetClient client.Client
 
-	PoolName        string
-	MachinePoolName string
+	PoolName string
 
 	TargetPoolName   string
 	TargetPoolLabels map[string]string
@@ -70,7 +69,7 @@ func (r *MixedVolumeReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 }
 
 func (r *MixedVolumeReconciler) domain() domain.Domain {
-	return partitionletcontrollerscommon.Domain.Subdomain(r.ClusterName)
+	return partitionletcontrollerscommon.Domain.Subdomain(r.PoolName)
 }
 
 func (r *MixedVolumeReconciler) finalizer() string {
@@ -84,7 +83,7 @@ func (r *MixedVolumeReconciler) reconcileExists(ctx context.Context, log logr.Lo
 	if storagehelper.VolumeRunsInVolumePool(volume, r.PoolName) {
 		return r.reconcile(ctx, log, volume)
 	}
-	used, err := storagectrl.IsVolumeUsedCachedOrLive(ctx, r.APIReader, r.Client, volume, r.MachinePoolName)
+	used, err := storagectrl.IsVolumeUsedCachedOrLive(ctx, r.APIReader, r.Client, volume, r.PoolName)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -234,7 +233,7 @@ func (r *MixedVolumeReconciler) SetupWithManager(mgr broker.Manager) error {
 				machine := object.(*computev1alpha1.Machine)
 				return storagectrl.VolumeReconcileRequestsFromMachine(machine)
 			}),
-			builder.WithPredicates(computepredicate.MachineRunsInMachinePoolPredicate(r.MachinePoolName)),
+			builder.WithPredicates(computepredicate.MachineRunsInMachinePoolPredicate(r.PoolName)),
 		).
 		ReferencesViaField(&corev1.Secret{}, storagefields.VolumeSpecSecretNamesField).
 		ReferencesTargetViaField(&corev1.Secret{}, storagefields.VolumeStatusSecretNamesField).

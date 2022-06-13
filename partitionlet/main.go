@@ -84,8 +84,7 @@ func main() {
 
 	var targetKubeconfig string
 
-	var machinePoolName string
-	var volumePoolName string
+	var poolName string
 	var providerID string
 	var initVolumePoolLabels map[string]string
 	var initVolumePoolAnnotations map[string]string
@@ -111,8 +110,7 @@ func main() {
 
 	flag.StringVar(&targetKubeconfig, "target-kubeconfig", "", "Path pointing to the target kubeconfig.")
 
-	flag.StringVar(&machinePoolName, "machine-pool-name", hostName, "Name of the machine pool to announce.")
-	flag.StringVar(&volumePoolName, "volume-pool-name", hostName, "Name of the volume pool to announce")
+	flag.StringVar(&poolName, "pool-name", hostName, "Name of the machine and volume pool to announce.")
 
 	flag.StringVar(&providerID, "provider-id", "", "Provider id of the machine and volume pool to announce (usually <provider-type>://<id>).")
 
@@ -167,7 +165,7 @@ func main() {
 	}
 
 	if leaderElectionID == "" {
-		leaderElectionID = partitionletcontrollerscommon.Domain.Subdomain(hash.FNV32A(machinePoolName, volumePoolName)).String()
+		leaderElectionID = partitionletcontrollerscommon.Domain.Subdomain(hash.FNV32A(poolName)).String()
 	}
 
 	mgr, err := broker.NewManager(cfg, targetCluster, broker.Options{
@@ -212,11 +210,12 @@ func main() {
 		Scheme:          scheme,
 		NamespacePrefix: "partitionlet-",
 		ClusterName:     clusterName,
+		PoolName:        poolName,
 		Domain:          partitionletcontrollerscommon.Domain,
 		ResyncPeriod:    namespaceResyncPeriod,
 	}
-	namespaceReconciler.Dependent(&storagev1alpha1.Volume{}, storagepredicate.VolumeRunsInVolumePoolPredicate(volumePoolName))
-	namespaceReconciler.Dependent(&computev1alpha1.Machine{}, computepredicate.MachineRunsInMachinePoolPredicate(machinePoolName))
+	namespaceReconciler.Dependent(&storagev1alpha1.Volume{}, storagepredicate.VolumeRunsInVolumePoolPredicate(poolName))
+	namespaceReconciler.Dependent(&computev1alpha1.Machine{}, computepredicate.MachineRunsInMachinePoolPredicate(poolName))
 	if err = namespaceReconciler.SetupWithManager(mgr); err != nil {
 		logErrAndExit(err, "unable to set up controller", "controller", "Namespace")
 	}
@@ -231,9 +230,11 @@ func main() {
 		TargetClient: mgr.GetTarget().GetBrokerClient(),
 		Scheme:       scheme,
 		ClusterName:  clusterName,
+		PoolName:     poolName,
+		Domain:       partitionletcontrollerscommon.Domain,
 	}
-	secretReconciler.Dependent(&storagev1alpha1.Volume{}, storagefields.VolumeSpecSecretNamesField, storagepredicate.VolumeRunsInVolumePoolPredicate(volumePoolName))
-	secretReconciler.Dependent(&computev1alpha1.Machine{}, computefields.MachineSpecSecretNames, computepredicate.MachineRunsInMachinePoolPredicate(machinePoolName))
+	secretReconciler.Dependent(&storagev1alpha1.Volume{}, storagefields.VolumeSpecSecretNamesField, storagepredicate.VolumeRunsInVolumePoolPredicate(poolName))
+	secretReconciler.Dependent(&computev1alpha1.Machine{}, computefields.MachineSpecSecretNames, computepredicate.MachineRunsInMachinePoolPredicate(poolName))
 	if err = secretReconciler.SetupWithManager(mgr); err != nil {
 		logErrAndExit(err, "unable to set up controller", "controller", "Secret")
 	}
@@ -248,9 +249,10 @@ func main() {
 		TargetClient: mgr.GetTarget().GetBrokerClient(),
 		Scheme:       scheme,
 		ClusterName:  clusterName,
+		PoolName:     poolName,
 		Domain:       partitionletcontrollerscommon.Domain,
 	}
-	configMapReconciler.Dependent(&computev1alpha1.Machine{}, computefields.MachineSpecConfigMapNames, computepredicate.MachineRunsInMachinePoolPredicate(machinePoolName))
+	configMapReconciler.Dependent(&computev1alpha1.Machine{}, computefields.MachineSpecConfigMapNames, computepredicate.MachineRunsInMachinePoolPredicate(poolName))
 	if err = configMapReconciler.SetupWithManager(mgr); err != nil {
 		logErrAndExit(err, "unable to set up controller", "controller", "ConfigMap")
 	}
@@ -263,8 +265,7 @@ func main() {
 		Client:             mgr.GetClient(),
 		APIReader:          mgr.GetAPIReader(),
 		TargetClient:       mgr.GetTarget().GetClient(),
-		PoolName:           volumePoolName,
-		MachinePoolName:    machinePoolName,
+		PoolName:           poolName,
 		TargetPoolName:     targetVolumePoolName,
 		TargetPoolLabels:   targetVolumePoolLabels,
 		FallbackPoolName:   fallbackVolumePoolName,
@@ -281,7 +282,7 @@ func main() {
 	if err = (&brokerstorage.VolumePoolReconciler{
 		Client:              mgr.GetClient(),
 		Target:              mgr.GetTarget().GetClient(),
-		PoolName:            volumePoolName,
+		PoolName:            poolName,
 		ProviderID:          providerID,
 		InitPoolLabels:      initVolumePoolLabels,
 		InitPoolAnnotations: initVolumePoolAnnotations,
@@ -296,7 +297,7 @@ func main() {
 	if err = (&brokercompute.MachinePoolReconciler{
 		Client:              mgr.GetClient(),
 		TargetClient:        mgr.GetTarget().GetClient(),
-		PoolName:            machinePoolName,
+		PoolName:            poolName,
 		ProviderID:          providerID,
 		InitPoolLabels:      initMachinePoolLabels,
 		InitPoolAnnotations: initMachinePoolAnnotations,
@@ -314,7 +315,7 @@ func main() {
 		APIReader:       mgr.GetAPIReader(),
 		TargetClient:    mgr.GetTarget().GetClient(),
 		ClusterName:     clusterName,
-		MachinePoolName: machinePoolName,
+		MachinePoolName: poolName,
 		Domain:          partitionletcontrollerscommon.Domain,
 	}
 	if err = networkReconciler.SetupWithManager(mgr); err != nil {
@@ -330,7 +331,7 @@ func main() {
 		APIReader:       mgr.GetAPIReader(),
 		TargetClient:    mgr.GetTarget().GetClient(),
 		ClusterName:     clusterName,
-		MachinePoolName: machinePoolName,
+		MachinePoolName: poolName,
 		Domain:          partitionletcontrollerscommon.Domain,
 	}
 	if err = networkInterfaceReconciler.SetupWithManager(mgr); err != nil {
@@ -347,7 +348,7 @@ func main() {
 		TargetClient:    mgr.GetTarget().GetClient(),
 		Scheme:          mgr.GetScheme(),
 		ClusterName:     clusterName,
-		MachinePoolName: machinePoolName,
+		MachinePoolName: poolName,
 		Domain:          partitionletcontrollerscommon.Domain,
 	}
 	if err = aliasPrefixReconciler.SetupWithManager(mgr); err != nil {
@@ -363,7 +364,7 @@ func main() {
 		APIReader:       mgr.GetAPIReader(),
 		TargetClient:    mgr.GetTarget().GetClient(),
 		ClusterName:     clusterName,
-		MachinePoolName: machinePoolName,
+		MachinePoolName: poolName,
 		Domain:          partitionletcontrollerscommon.Domain,
 	}
 	if err = virtualIPReconciler.SetupWithManager(mgr); err != nil {
@@ -379,7 +380,7 @@ func main() {
 		APIReader:        mgr.GetAPIReader(),
 		Scheme:           mgr.GetScheme(),
 		TargetClient:     mgr.GetTarget().GetClient(),
-		PoolName:         machinePoolName,
+		PoolName:         poolName,
 		TargetPoolLabels: targetMachinePoolLabels,
 		TargetPoolName:   targetMachinePoolName,
 		ClusterName:      clusterName,

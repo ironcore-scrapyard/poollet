@@ -46,6 +46,7 @@ type ConfigMapReconciler struct {
 	Scheme       *runtime.Scheme
 
 	ClusterName string
+	PoolName    string
 	Domain      domain.Domain
 }
 
@@ -60,7 +61,7 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 }
 
 func (r *ConfigMapReconciler) domain() domain.Domain {
-	return r.Domain.Subdomain(r.ClusterName)
+	return r.Domain.Subdomain(r.PoolName)
 }
 
 func (r *ConfigMapReconciler) finalizer() string {

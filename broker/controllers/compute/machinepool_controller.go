@@ -68,7 +68,7 @@ func (r *MachinePoolReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (
 }
 
 func (r *MachinePoolReconciler) domain() domain.Domain {
-	return r.Domain.Subdomain(r.ClusterName)
+	return r.Domain.Subdomain(r.PoolName)
 }
 
 func (r *MachinePoolReconciler) finalizer() string {

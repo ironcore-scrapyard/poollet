@@ -58,6 +58,7 @@ type NamespaceReconciler struct {
 
 	NamespacePrefix string
 	ClusterName     string
+	PoolName        string
 	Domain          domain.Domain
 
 	ResyncPeriod time.Duration
@@ -68,6 +69,10 @@ func (r *NamespaceReconciler) Dependent(obj client.Object, prct ...predicate.Pre
 }
 
 func (r *NamespaceReconciler) domain() domain.Domain {
+	return r.Domain.Subdomain(r.PoolName)
+}
+
+func (r *NamespaceReconciler) targetDomain() domain.Domain {
 	return r.Domain.Subdomain(r.ClusterName)
 }
 
@@ -75,8 +80,8 @@ func (r *NamespaceReconciler) finalizer() string {
 	return r.domain().Slash("namespace")
 }
 
-func (r *NamespaceReconciler) sourceUIDLabel() string {
-	return r.domain().Slash("namespace-source-uid")
+func (r *NamespaceReconciler) targetSourceUIDLabel() string {
+	return r.targetDomain().Slash("namespace-source-uid")
 }
 
 func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -154,7 +159,7 @@ func (r *NamespaceReconciler) delete(ctx context.Context, log logr.Logger, ns *c
 	log.V(1).Info("Delete")
 
 	if err := brokerclient.BrokerControlledListSingleAndDelete(ctx, r.TargetAPIReader, r.Client, r.ClusterName, ns, &corev1.Namespace{},
-		client.MatchingLabels{r.sourceUIDLabel(): string(ns.UID)},
+		client.MatchingLabels{r.targetSourceUIDLabel(): string(ns.UID)},
 	); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, fmt.Errorf("error deleting target: %w", err)
@@ -180,9 +185,9 @@ func (r *NamespaceReconciler) reconcile(ctx context.Context, log logr.Logger, ns
 	log.V(1).Info("Applying target")
 	targetNS := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{GenerateName: r.NamespacePrefix}}
 	if _, err := brokerclient.BrokerControlledListSingleGenerateOrPatch(ctx, r.TargetAPIReader, r.TargetClient, r.ClusterName, ns, targetNS, func() error {
-		poolletmeta.SetLabel(targetNS, r.sourceUIDLabel(), string(ns.UID))
+		poolletmeta.SetLabel(targetNS, r.targetSourceUIDLabel(), string(ns.UID))
 		return nil
-	}, client.MatchingLabels{r.sourceUIDLabel(): string(ns.UID)}); err != nil {
+	}, client.MatchingLabels{r.targetSourceUIDLabel(): string(ns.UID)}); err != nil {
 		return ctrl.Result{}, fmt.Errorf("error applying target: %w", err)
 	}
 
@@ -200,7 +205,7 @@ func (r *NamespaceReconciler) Target(ctx context.Context, key client.ObjectKey, 
 	}
 
 	if err := brokerclient.BrokerControlledListSingle(ctx, r.TargetAPIReader, r.Scheme, r.ClusterName, ns, targetNS,
-		client.MatchingLabels{r.sourceUIDLabel(): string(ns.UID)},
+		client.MatchingLabels{r.targetSourceUIDLabel(): string(ns.UID)},
 	); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return err

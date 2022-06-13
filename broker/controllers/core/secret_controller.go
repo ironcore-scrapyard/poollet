@@ -46,6 +46,7 @@ type SecretReconciler struct {
 	Scheme       *runtime.Scheme
 
 	ClusterName string
+	PoolName    string
 	Domain      domain.Domain
 }
 
@@ -59,8 +60,12 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return r.reconcileExists(ctx, log, secret)
 }
 
+func (r *SecretReconciler) domain() domain.Domain {
+	return r.Domain.Subdomain(r.PoolName)
+}
+
 func (r *SecretReconciler) finalizer() string {
-	return r.Domain.Subdomain(r.ClusterName).String()
+	return r.domain().Slash("secret")
 }
 
 func (r *SecretReconciler) reconcileExists(ctx context.Context, log logr.Logger, secret *corev1.Secret) (ctrl.Result, error) {

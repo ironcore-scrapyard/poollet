@@ -62,7 +62,7 @@ func (r *VolumeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 }
 
 func (r *VolumeReconciler) domain() domain.Domain {
-	return volumebrokerletcontrollerscommon.Domain.Subdomain(r.ClusterName)
+	return volumebrokerletcontrollerscommon.Domain.Subdomain(r.PoolName)
 }
 
 func (r *VolumeReconciler) finalizer() string {

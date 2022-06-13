@@ -58,7 +58,7 @@ type NetworkInterfaceReconciler struct {
 }
 
 func (r *NetworkInterfaceReconciler) domain() domain.Domain {
-	return r.Domain.Subdomain(r.ClusterName)
+	return r.Domain.Subdomain(r.MachinePoolName)
 }
 
 func (r *NetworkInterfaceReconciler) finalizer() string {
@@ -229,13 +229,12 @@ func (r *NetworkInterfaceReconciler) reconcile(ctx context.Context, log logr.Log
 	log.V(1).Info("Reconcile")
 
 	log.V(1).Info("Determining target namespace")
-	namespaceKey := client.ObjectKey{Name: nic.Namespace}
-	targetNamespace := &corev1.Namespace{}
-	if err := r.Provider.Target(ctx, namespaceKey, targetNamespace); err != nil {
+	targetNamespace, err := provider.TargetNamespaceFor(ctx, r.Provider, nic)
+	if err != nil {
 		return ctrl.Result{}, brokererrors.IgnoreNotSynced(err)
 	}
 
-	log = log.WithValues("TargetNamespace", targetNamespace.Name)
+	log = log.WithValues("TargetNamespace", targetNamespace)
 	log.V(1).Info("Determined target namespace")
 
 	log.V(1).Info("Ensuring finalizer")
@@ -257,11 +256,11 @@ func (r *NetworkInterfaceReconciler) reconcile(ctx context.Context, log logr.Log
 	return ctrl.Result{Requeue: partial}, nil
 }
 
-func (r *NetworkInterfaceReconciler) applyTarget(ctx context.Context, log logr.Logger, nic *networkingv1alpha1.NetworkInterface, targetNamespace *corev1.Namespace) (*networkingv1alpha1.NetworkInterface, bool, error) {
+func (r *NetworkInterfaceReconciler) applyTarget(ctx context.Context, log logr.Logger, nic *networkingv1alpha1.NetworkInterface, targetNamespace string) (*networkingv1alpha1.NetworkInterface, bool, error) {
 	var (
 		target = &networkingv1alpha1.NetworkInterface{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: targetNamespace.Name,
+				Namespace: targetNamespace,
 				Name:      nic.Name,
 			},
 		}
