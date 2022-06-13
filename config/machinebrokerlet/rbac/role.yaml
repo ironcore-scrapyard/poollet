@@ -11,6 +11,8 @@ rules:
       - get
       - list
       - watch
+      - patch
+      - update
   - apiGroups:
       - ""
     resources:
@@ -41,6 +43,8 @@ rules:
       - get
       - list
       - watch
+      - patch
+      - update
   - apiGroups:
       - ""
     resources:
@@ -56,6 +60,8 @@ rules:
       - get
       - list
       - watch
+      - patch
+      - update
   - apiGroups:
       - compute.api.onmetal.de
     resources:
@@ -79,6 +85,8 @@ rules:
       - get
       - list
       - watch
+      - patch
+      - update
   - apiGroups:
       - compute.api.onmetal.de
     resources:
@@ -113,6 +121,8 @@ rules:
       - get
       - list
       - watch
+      - patch
+      - update
   - apiGroups:
       - networking.api.onmetal.de
     resources:
@@ -136,6 +146,8 @@ rules:
       - get
       - list
       - watch
+      - patch
+      - update
   - apiGroups:
       - networking.api.onmetal.de
     resources:
@@ -159,6 +171,8 @@ rules:
       - get
       - list
       - watch
+      - patch
+      - update
   - apiGroups:
       - networking.api.onmetal.de
     resources:
@@ -182,6 +196,8 @@ rules:
       - get
       - list
       - watch
+      - patch
+      - update
   - apiGroups:
       - networking.api.onmetal.de
     resources:
@@ -205,6 +221,8 @@ rules:
       - get
       - list
       - watch
+      - patch
+      - update
   - apiGroups:
       - networking.api.onmetal.de
     resources:
@@ -220,6 +238,8 @@ rules:
       - get
       - list
       - watch
+      - patch
+      - update
   - apiGroups:
       - storage.api.onmetal.de
     resources:
@@ -243,3 +263,5 @@ rules:
       - get
       - list
       - watch
+      - patch
+      - update
