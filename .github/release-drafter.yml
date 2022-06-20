@@ -7,6 +7,8 @@ categories:
       - 'enhancement'
       - 'api-change'
       - 'compute'
+      - 'storage'
+      - 'networking'
   - title: '🐛 Bug Fixes'
     labels:
       - 'fix'
@@ -35,10 +37,18 @@ exclude-labels:
 autolabeler:
   - label: 'api-change'
     files:
-      - '/apis/*'
+      - '/api/*'
+  - label: 'storage'
+    files:
+      - '/proxyvolumebrokerlet/*'
+      - '/broker/controllers/storage/*'
   - label: 'compute'
     files:
-      - '/controllers/compute/*'
+      - '/machinebrokerlet/*'
+      - '/broker/controllers/compute/*'
+  - label: 'networking'
+    files:
+      - '/broker/controllers/networking/*'
   - label: 'documentation'
     files:
       - '*.md'
