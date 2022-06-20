@@ -222,7 +222,7 @@ func (r *MachinePoolReconciler) SetupWithManager(mgr broker.Manager) error {
 	ctx := ctrl.LoggerInto(context.TODO(), log)
 
 	if err := r.initialize(ctx, log); err != nil {
-		return fmt.Errorf("error initializing machine pool")
+		return fmt.Errorf("error initializing machine pool: %w", err)
 	}
 
 	return broker.NewControllerManagedBy(mgr, r.ClusterName).
