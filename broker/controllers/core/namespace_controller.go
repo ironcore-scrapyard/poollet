@@ -158,7 +158,7 @@ func (r *NamespaceReconciler) delete(ctx context.Context, log logr.Logger, ns *c
 
 	log.V(1).Info("Delete")
 
-	if err := brokerclient.BrokerControlledListSingleAndDelete(ctx, r.TargetAPIReader, r.Client, r.ClusterName, ns, &corev1.Namespace{},
+	if err := brokerclient.BrokerControlledListSingleAndDelete(ctx, r.TargetAPIReader, r.TargetClient, r.ClusterName, ns, &corev1.Namespace{},
 		client.MatchingLabels{r.targetSourceUIDLabel(): string(ns.UID)},
 	); err != nil {
 		if !apierrors.IsNotFound(err) {
