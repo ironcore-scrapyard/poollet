@@ -26,6 +26,7 @@ import (
 	"github.com/onmetal/poollet/broker"
 	"github.com/onmetal/poollet/broker/controllers/storage"
 	"github.com/onmetal/poollet/broker/domain"
+	brokerhandler "github.com/onmetal/poollet/broker/handler"
 	brokermeta "github.com/onmetal/poollet/broker/meta"
 	"github.com/onmetal/poollet/broker/provider"
 	proxyvolumebrokerletcontrollerscommon "github.com/onmetal/poollet/proxyvolumebrokerlet/controllers/common"
@@ -33,6 +34,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 type ProxyVolumeReconciler struct {
@@ -191,7 +193,13 @@ func (r *ProxyVolumeReconciler) SetupWithManager(mgr broker.Manager) error {
 		FilterNoTargetNamespace().
 		WatchTargetNamespaceCreated().
 		For(&storagev1alpha1.Volume{}).
-		OwnsTarget(&storagev1alpha1.Volume{}).
+		WatchesTarget(
+			&source.Kind{Type: &storagev1alpha1.Volume{}},
+			&brokerhandler.EnqueueRequestForBrokerOwner{
+				OwnerType:   &storagev1alpha1.Volume{},
+				ClusterName: r.ClusterName,
+			},
+		).
 		ReferencesViaField(&corev1.Secret{}, storagefields.VolumeSpecSecretNamesField).
 		ReferencesTargetViaField(&corev1.Secret{}, storagefields.VolumeStatusSecretNamesField).
 		Complete(r)
