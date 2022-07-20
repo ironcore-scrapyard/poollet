@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/onmetal/controller-utils/configutils"
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
@@ -81,7 +80,6 @@ func main() {
 	var targetPoolName string
 	var targetPoolLabels map[string]string
 
-	var namespaceResyncPeriod time.Duration
 	var clusterName string
 
 	flag.StringVar(&leaderElectionID, "leader-election-id", "", "Leader election id to use. If empty, defaulted to the domain + hash of the pool name.")
@@ -101,7 +99,6 @@ func main() {
 	flag.StringVar(&targetPoolName, "target-pool-name", "", "Name of the target pool to schedule volumes on.")
 	flag.StringToStringVar(&targetPoolLabels, "target-pool-labels", nil, "Labels to select the target pools to schedule volumes on.")
 
-	flag.DurationVar(&namespaceResyncPeriod, "namespace-resync-period", 10*time.Second, "Time to resync namespaces in.")
 	flag.StringVar(&clusterName, "cluster-name", "", "Name of the source cluster. Used for cross-cluster owner references / finalizers.")
 
 	opts := zap.Options{
@@ -171,7 +168,6 @@ func main() {
 		NamespacePrefix: "volumebrokerlet-",
 		ClusterName:     clusterName,
 		Domain:          volumebrokerletcontrollerscommon.Domain,
-		ResyncPeriod:    namespaceResyncPeriod,
 	}
 	namespaceReconciler.Dependent(&storagev1alpha1.Volume{}, storagepredicate.VolumeRunsInVolumePoolPredicate(poolName))
 	if err = namespaceReconciler.SetupWithManager(mgr); err != nil {

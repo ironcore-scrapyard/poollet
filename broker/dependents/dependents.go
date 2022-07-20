@@ -18,10 +18,10 @@ import (
 	"context"
 	"errors"
 
+	"github.com/onmetal/controller-utils/metautils"
 	"github.com/onmetal/poollet/broker/builder"
 	brokerclient "github.com/onmetal/poollet/broker/client"
 	brokerhandler "github.com/onmetal/poollet/broker/handler"
-	poolletmeta "github.com/onmetal/poollet/meta"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -58,7 +58,7 @@ func (d *Dependents) IsReferenced(ctx context.Context, r client.Reader, c broker
 
 func (d *Dependents) isReferencedCached(ctx context.Context, c client.Client, obj client.Object) (bool, error) {
 	for _, dependent := range d.dependents {
-		dependentList, err := poolletmeta.NewListForObject(dependent.Type, c.Scheme())
+		dependentList, err := metautils.NewListForObject(c.Scheme(), dependent.Type)
 		if err != nil {
 			return false, err
 		}
@@ -85,7 +85,7 @@ func (d *Dependents) isReferencedLive(ctx context.Context, r client.Reader, obj 
 		errReferenced = errors.New("referenced")
 	)
 	for _, dependent := range d.dependents {
-		dependentList, err := poolletmeta.NewListForObject(dependent.Type, scheme)
+		dependentList, err := metautils.NewListForObject(scheme, dependent.Type)
 		if err != nil {
 			return false, err
 		}
@@ -96,7 +96,7 @@ func (d *Dependents) isReferencedLive(ctx context.Context, r client.Reader, obj 
 			return false, err
 		}
 
-		if err := poolletmeta.EachListItem(dependentList, func(obj client.Object) error {
+		if err := metautils.EachListItem(dependentList, func(obj client.Object) error {
 			refs, err := ex.ExtractField(obj, dependent.Field)
 			if err != nil {
 				return err

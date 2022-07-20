@@ -170,7 +170,6 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 			NamespacePrefix: "target-",
 			ClusterName:     clusterName,
 			Domain:          domain,
-			ResyncPeriod:    1 * time.Second,
 		}
 		namespaceReconciler.Dependent(&testdatav1.Foo{})
 		Expect(namespaceReconciler.SetupWithManager(k8sManager)).To(Succeed())

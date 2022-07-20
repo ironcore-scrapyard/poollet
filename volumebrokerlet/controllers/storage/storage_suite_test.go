@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/onmetal/controller-utils/buildutils"
 	"github.com/onmetal/controller-utils/modutils"
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
 	"github.com/onmetal/onmetal-api/envtestutils"
@@ -29,7 +30,6 @@ import (
 	brokercluster "github.com/onmetal/poollet/broker/cluster"
 	"github.com/onmetal/poollet/broker/controllers/core"
 	"github.com/onmetal/poollet/broker/provider"
-	"github.com/onmetal/poollet/internal/apiserverbin"
 	volumebrokerletcontrollerscommon "github.com/onmetal/poollet/volumebrokerlet/controllers/common"
 	"github.com/onmetal/poollet/volumebrokerlet/controllers/storage"
 	. "github.com/onsi/ginkgo/v2"
@@ -113,21 +113,17 @@ var _ = BeforeSuite(func() {
 	SetClient(k8sClient)
 
 	apiSrv, err := apiserver.New(cfg, apiserver.Options{
-		Command:     []string{apiserverbin.Path},
-		ETCDServers: []string{testEnv.ControlPlane.Etcd.URL.String()},
-		Host:        testEnvExt.APIServiceInstallOptions.LocalServingHost,
-		Port:        testEnvExt.APIServiceInstallOptions.LocalServingPort,
-		CertDir:     testEnvExt.APIServiceInstallOptions.LocalServingCertDir,
+		MainPath:     "github.com/onmetal/onmetal-api/cmd/apiserver",
+		BuildOptions: []buildutils.BuildOption{buildutils.ModModeMod},
+		ETCDServers:  []string{testEnv.ControlPlane.Etcd.URL.String()},
+		Host:         testEnvExt.APIServiceInstallOptions.LocalServingHost,
+		Port:         testEnvExt.APIServiceInstallOptions.LocalServingPort,
+		CertDir:      testEnvExt.APIServiceInstallOptions.LocalServingCertDir,
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	ctx, cancel := context.WithCancel(context.Background())
-	DeferCleanup(cancel)
-	go func() {
-		defer GinkgoRecover()
-		err := apiSrv.Start(ctx)
-		Expect(err).NotTo(HaveOccurred())
-	}()
+	Expect(apiSrv.Start()).To(Succeed())
+	DeferCleanup(apiSrv.Stop)
 
 	Expect(envtestutils.WaitUntilAPIServicesReadyWithTimeout(apiServiceTimeout, testEnvExt, k8sClient, scheme.Scheme)).To(Succeed())
 })
@@ -177,7 +173,6 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 			NamespacePrefix: "target-",
 			ClusterName:     clusterName,
 			Domain:          domain,
-			ResyncPeriod:    1 * time.Second,
 		}
 		namespaceReconciler.Dependent(&storagev1alpha1.Volume{})
 		Expect(namespaceReconciler.SetupWithManager(k8sManager)).To(Succeed())

@@ -17,9 +17,9 @@ package handler
 import (
 	"context"
 
+	"github.com/onmetal/controller-utils/metautils"
 	brokermeta "github.com/onmetal/poollet/broker/meta"
 	poollethandler "github.com/onmetal/poollet/handler"
-	poolletmeta "github.com/onmetal/poollet/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -70,7 +70,7 @@ func (e *EnqueueRequestForBrokerOwnerByFieldReference) parseOwnerTypeGroupKind(s
 
 func (e *EnqueueRequestForBrokerOwnerByFieldReference) initializeBaseList(scheme *runtime.Scheme) error {
 	var err error
-	e.baseList, err = poolletmeta.NewListForObject(e.OwnerAndReferentType, scheme)
+	e.baseList, err = metautils.NewListForObject(scheme, e.OwnerAndReferentType)
 	return err
 }
 
@@ -127,7 +127,7 @@ func (e *EnqueueRequestForBrokerOwnerByFieldReference) handle(obj client.Object,
 		return
 	}
 
-	if err := poolletmeta.EachListItem(list, func(obj client.Object) error {
+	if err := metautils.EachListItem(list, func(obj client.Object) error {
 		e.getOwnerReconcileRequest(obj, res)
 		return nil
 	}); err != nil {
