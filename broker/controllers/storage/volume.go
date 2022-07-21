@@ -20,6 +20,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/onmetal/controller-utils/clientutils"
+	"github.com/onmetal/controller-utils/metautils"
 	commonv1alpha1 "github.com/onmetal/onmetal-api/apis/common/v1alpha1"
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
@@ -30,7 +31,6 @@ import (
 	"github.com/onmetal/poollet/broker/provider"
 	"github.com/onmetal/poollet/broker/sync"
 	poolletclient "github.com/onmetal/poollet/client"
-	poolletmeta "github.com/onmetal/poollet/meta"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -341,7 +341,7 @@ func (r *AccessApplier) ApplyAccess(ctx context.Context, log logr.Logger, volume
 		},
 	}
 	if _, err := poolletclient.ControlledListSingleGenerateOrPatch(ctx, r.APIReader, r.Client, volume, secret, func() error {
-		poolletmeta.SetLabel(secret, r.accessVolumeUIDLabel(), string(volume.UID))
+		metautils.SetLabel(secret, r.accessVolumeUIDLabel(), string(volume.UID))
 		secret.Data = targetAccessSecret.Data
 		return nil
 	}, client.MatchingLabels{

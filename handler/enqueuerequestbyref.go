@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/onmetal/poollet/meta"
+	"github.com/onmetal/controller-utils/metautils"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,7 +42,7 @@ func (e *EnqueueRequestByFieldReference) InjectClient(c client.Client) error {
 	e.client = c
 
 	var err error
-	e.baseReferentList, err = meta.NewListForObject(e.ReferentType, e.client.Scheme())
+	e.baseReferentList, err = metautils.NewListForObject(e.client.Scheme(), e.ReferentType)
 	if err != nil {
 		return fmt.Errorf("error getting list for object: %w", err)
 	}

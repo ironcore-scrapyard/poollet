@@ -17,10 +17,10 @@ package handler
 import (
 	"context"
 
+	"github.com/onmetal/controller-utils/metautils"
 	brokercluster "github.com/onmetal/poollet/broker/cluster"
 	brokermeta "github.com/onmetal/poollet/broker/meta"
 	poollethandler "github.com/onmetal/poollet/handler"
-	poolletmeta "github.com/onmetal/poollet/meta"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -64,7 +64,7 @@ func (e *EnqueueRequestForBrokerOwnerOnNamespaceCreated) parseOwnerTypeGroupKind
 
 func (e *EnqueueRequestForBrokerOwnerOnNamespaceCreated) initializeBaseList(scheme *runtime.Scheme) error {
 	var err error
-	e.baseList, err = poolletmeta.NewListForObject(e.OwnerType, scheme)
+	e.baseList, err = metautils.NewListForObject(scheme, e.OwnerType)
 	return err
 }
 

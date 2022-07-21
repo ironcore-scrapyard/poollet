@@ -19,7 +19,6 @@ import (
 	"fmt"
 
 	"github.com/onmetal/controller-utils/metautils"
-	poolletmeta "github.com/onmetal/poollet/meta"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -47,7 +46,7 @@ func ListSingle(ctx context.Context, r client.Reader, scheme *runtime.Scheme, ob
 		return err
 	}
 
-	list, err := poolletmeta.NewListForObject(obj, scheme)
+	list, err := metautils.NewListForObject(scheme, obj)
 	if err != nil {
 		return err
 	}

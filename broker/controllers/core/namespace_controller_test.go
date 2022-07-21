@@ -15,9 +15,8 @@
 package core_test
 
 import (
-	"time"
-
 	. "github.com/onmetal/onmetal-api/testutils"
+	"github.com/onmetal/poollet/broker/errors"
 	brokermeta "github.com/onmetal/poollet/broker/meta"
 	testdatav1 "github.com/onmetal/poollet/testdata/api/v1"
 	. "github.com/onsi/ginkgo/v2"
@@ -33,7 +32,15 @@ var _ = Describe("NamespaceController", func() {
 	ns, provider := SetupTest(ctx)
 
 	It("should sync the namespace", func() {
-		By("creating a foo in the namespace")
+		By("asserting there is no target namespace since it is not used")
+		targetNS := &corev1.Namespace{}
+		// we have to use Eventually here since provider delegates to the namespace
+		// controller that uses the manager's client, which needs to wait until the cache is synced.
+		Eventually(func() error {
+			return provider.Target(ctx, client.ObjectKey{Name: ns.Name}, targetNS)
+		}).Should(Satisfy(errors.IsNotSynced))
+
+		By("creating a foo in the namespace, causing usage of the namespace")
 		foo := &testdatav1.Foo{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:    ns.Name,
@@ -42,20 +49,19 @@ var _ = Describe("NamespaceController", func() {
 		}
 		Expect(k8sClient.Create(ctx, foo)).To(Succeed())
 
-		By("waiting for the reconciler to report a target")
-		targetNS := &corev1.Namespace{}
+		By("waiting for the reconciler to report a target, indicating the target namespace being present")
 		Eventually(func() error {
 			return provider.Target(ctx, client.ObjectKey{Name: ns.Name}, targetNS)
 		}).Should(Succeed())
 
 		By("inspecting the namespace")
-		Expect(targetNS.Name).NotTo(Equal(ns.Name))
+		Expect(targetNS.GenerateName).To(Equal(ns.Name))
 		Expect(brokermeta.IsBrokerControlledBy(clusterName, ns, targetNS)).To(BeTrue(), "target is not broker-controlled")
 
 		By("deleting the foo")
 		Expect(k8sClient.Delete(ctx, foo)).To(Succeed())
 
-		By("waiting for the target namespace to be gone")
-		Eventually(Object(targetNS), 20*time.Second).Should(HaveField("Status.Phase", Equal(corev1.NamespaceTerminating)))
+		By("asserting the target namespace is still present")
+		Consistently(Get(targetNS)).Should(Succeed())
 	})
 })

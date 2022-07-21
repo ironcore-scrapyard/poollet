@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/onmetal/controller-utils/buildutils"
 	"github.com/onmetal/controller-utils/modutils"
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	"github.com/onmetal/onmetal-api/envtestutils"
@@ -29,7 +30,6 @@ import (
 	brokercontrollerscommon "github.com/onmetal/poollet/broker/controllers/common"
 	"github.com/onmetal/poollet/broker/controllers/compute"
 	"github.com/onmetal/poollet/broker/provider"
-	"github.com/onmetal/poollet/internal/apiserverbin"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -120,21 +120,17 @@ var _ = BeforeSuite(func() {
 	SetClient(k8sClient)
 
 	apiSrv, err := apiserver.New(cfg, apiserver.Options{
-		Command:     []string{apiserverbin.Path},
-		ETCDServers: []string{testEnv.ControlPlane.Etcd.URL.String()},
-		Host:        testEnvExt.APIServiceInstallOptions.LocalServingHost,
-		Port:        testEnvExt.APIServiceInstallOptions.LocalServingPort,
-		CertDir:     testEnvExt.APIServiceInstallOptions.LocalServingCertDir,
+		MainPath:     "github.com/onmetal/onmetal-api/cmd/apiserver",
+		BuildOptions: []buildutils.BuildOption{buildutils.ModModeMod},
+		ETCDServers:  []string{testEnv.ControlPlane.Etcd.URL.String()},
+		Host:         testEnvExt.APIServiceInstallOptions.LocalServingHost,
+		Port:         testEnvExt.APIServiceInstallOptions.LocalServingPort,
+		CertDir:      testEnvExt.APIServiceInstallOptions.LocalServingCertDir,
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	ctx, cancel := context.WithCancel(context.Background())
-	DeferCleanup(cancel)
-	go func() {
-		defer GinkgoRecover()
-		err := apiSrv.Start(ctx)
-		Expect(err).NotTo(HaveOccurred())
-	}()
+	Expect(apiSrv.Start()).To(Succeed())
+	DeferCleanup(apiSrv.Stop)
 
 	Expect(envtestutils.WaitUntilAPIServicesReadyWithTimeout(apiServiceTimeout, testEnvExt, k8sClient, scheme.Scheme)).To(Succeed())
 })

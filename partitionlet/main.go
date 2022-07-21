@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/onmetal/controller-utils/configutils"
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
@@ -97,7 +96,6 @@ func main() {
 	var targetMachinePoolName string
 	var targetMachinePoolLabels map[string]string
 
-	var namespaceResyncPeriod time.Duration
 	var clusterName string
 
 	flag.StringVar(&leaderElectionID, "leader-election-id", "", "Leader election id to use. If empty, defaulted to the domain + hash of pool names.")
@@ -129,7 +127,6 @@ func main() {
 	flag.StringVar(&fallbackVolumePoolName, "fallback-volume-pool-name", "", "Name of the fallback pool to schedule volumes on")
 	flag.StringToStringVar(&fallbackVolumePoolLabels, "fallback-volume-pool-labels", nil, "Labels to select the fallback volume pool to schedule volumes on.")
 
-	flag.DurationVar(&namespaceResyncPeriod, "namespace-resync-period", 10*time.Second, "Time to resync namespaces in.")
 	flag.StringVar(&clusterName, "cluster-name", "", "Name of the source cluster. Used for cross-cluster owner references / finalizers.")
 
 	opts := zap.Options{
@@ -212,7 +209,6 @@ func main() {
 		ClusterName:     clusterName,
 		PoolName:        poolName,
 		Domain:          partitionletcontrollerscommon.Domain,
-		ResyncPeriod:    namespaceResyncPeriod,
 	}
 	namespaceReconciler.Dependent(&storagev1alpha1.Volume{}, storagepredicate.VolumeRunsInVolumePoolPredicate(poolName))
 	namespaceReconciler.Dependent(&computev1alpha1.Machine{}, computepredicate.MachineRunsInMachinePoolPredicate(poolName))

@@ -15,7 +15,7 @@
 package handler
 
 import (
-	poolletmeta "github.com/onmetal/poollet/meta"
+	"github.com/onmetal/controller-utils/metautils"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -49,7 +49,7 @@ func InsertObjectRequest(s RequestSet, obj client.Object) {
 }
 
 func InsertListRequests(s RequestSet, list client.ObjectList) error {
-	return poolletmeta.EachListItem(list, func(obj client.Object) error {
+	return metautils.EachListItem(list, func(obj client.Object) error {
 		InsertObjectRequest(s, obj)
 		return nil
 	})
