@@ -29,6 +29,7 @@ import (
 	computefields "github.com/onmetal/poollet/api/compute/index/fields"
 	"github.com/onmetal/poollet/broker"
 	brokerclient "github.com/onmetal/poollet/broker/client"
+	"github.com/onmetal/poollet/broker/controllers/compute/events"
 	"github.com/onmetal/poollet/broker/domain"
 	brokererrors "github.com/onmetal/poollet/broker/errors"
 	"github.com/onmetal/poollet/broker/provider"
@@ -38,12 +39,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 type MachineReconciler struct {
+	record.EventRecorder
 	Provider provider.Provider
 
 	client.Client
@@ -199,6 +202,9 @@ func (r *MachineReconciler) registerImagePullSecretMutation(ctx context.Context,
 		if !brokererrors.IsNotSyncedOrNotFound(err) {
 			return fmt.Errorf("error getting image pull secret %s target: %w", imagePullSecretKey, err)
 		}
+		if apierrors.IsNotFound(err) {
+			r.Eventf(machine, corev1.EventTypeWarning, "ImagePullSecretNotFound", "Image pull secret %s not found", imagePullSecretKey.Name)
+		}
 		b.PartialSync = true
 		return nil
 	}
@@ -219,17 +225,20 @@ func (r *MachineReconciler) registerIgnitionMutation(ctx context.Context, machin
 	}
 
 	ignitionKey := client.ObjectKey{Namespace: machine.Namespace, Name: ignitionRef.Name}
-	targetIgnition := &corev1.ConfigMap{}
+	targetIgnition := &corev1.Secret{}
 	if err := r.Provider.Target(ctx, ignitionKey, targetIgnition); err != nil {
 		if !brokererrors.IsNotSyncedOrNotFound(err) {
 			return fmt.Errorf("error getting ignition %s target: %w", ignitionKey, err)
+		}
+		if apierrors.IsNotFound(err) {
+			r.Eventf(machine, corev1.EventTypeWarning, events.FailedApplyingIgnition, "Ignition %s not found", ignitionKey.Name)
 		}
 		b.PartialSync = true
 		return nil
 	}
 
 	b.Add(func() {
-		target.Spec.IgnitionRef = &commonv1alpha1.ConfigMapKeySelector{
+		target.Spec.IgnitionRef = &commonv1alpha1.SecretKeySelector{
 			LocalObjectReference: corev1.LocalObjectReference{Name: targetIgnition.Name},
 			Key:                  ignitionRef.Key,
 		}
@@ -254,34 +263,37 @@ func (r *MachineReconciler) machineVolumeName(machine *computev1alpha1.Machine, 
 	return shared.MachineEphemeralVolumeName(machine.Name, machineVolume.Name)
 }
 
-func (r *MachineReconciler) targetVolumeSource(ctx context.Context, machine *computev1alpha1.Machine, machineVolume *computev1alpha1.Volume) (*computev1alpha1.VolumeSource, bool, error) {
+func (r *MachineReconciler) targetVolumeSource(ctx context.Context, machine *computev1alpha1.Machine, machineVolume *computev1alpha1.Volume) (src *computev1alpha1.VolumeSource, ok bool, warning string, err error) {
 	switch {
 	case machineVolume.EmptyDisk != nil:
 		return &computev1alpha1.VolumeSource{
 			EmptyDisk: machineVolume.EmptyDisk.DeepCopy(),
-		}, true, nil
+		}, true, "", nil
 	case machineVolume.VolumeRef != nil || machineVolume.Ephemeral != nil:
 		status, ok := r.findMachineVolumeStatus(machine, machineVolume.Name)
 		if !ok || status.Phase != computev1alpha1.VolumePhaseBound {
-			return nil, false, nil
+			return nil, false, "", nil
 		}
 
 		volumeKey := client.ObjectKey{Namespace: machine.Namespace, Name: r.machineVolumeName(machine, machineVolume)}
 		targetVolume := &storagev1alpha1.Volume{}
 		if err := r.Provider.Target(ctx, volumeKey, targetVolume); err != nil {
 			if !brokererrors.IsNotSyncedOrNotFound(err) {
-				return nil, false, fmt.Errorf("error getting volume %s target: %w", volumeKey, err)
+				return nil, false, "", fmt.Errorf("error getting volume %s target: %w", volumeKey, err)
 			}
-			return nil, false, nil
+			if apierrors.IsNotFound(err) {
+				return nil, false, fmt.Sprintf("volume %s not found", volumeKey.Name), nil
+			}
+			return nil, false, "", nil
 		}
 
 		return &computev1alpha1.VolumeSource{
 			VolumeRef: &corev1.LocalObjectReference{
 				Name: targetVolume.Name,
 			},
-		}, true, nil
+		}, true, "", nil
 	default:
-		return nil, false, fmt.Errorf("unrecognized volume %#v", machineVolume)
+		return nil, false, "", fmt.Errorf("unrecognized volume %#v", machineVolume)
 	}
 }
 
@@ -291,22 +303,29 @@ func (r *MachineReconciler) registerVolumesMutation(ctx context.Context, machine
 		// Reasons are if e.g. the corresponding claim / hasn't been synced.
 		// In these cases, we want to keep any value that is there.
 		unhandledNames = sets.NewString()
+		warnings       []string
 		targetVolumes  []computev1alpha1.Volume
 	)
 
 	for _, machineVolume := range machine.Spec.Volumes {
-		src, ok, err := r.targetVolumeSource(ctx, machine, &machineVolume)
+		src, ok, warning, err := r.targetVolumeSource(ctx, machine, &machineVolume)
 		if err != nil {
 			return fmt.Errorf("[volume %s] %w", machineVolume.Name, err)
 		}
-
 		if !ok {
 			b.PartialSync = true
 			unhandledNames.Insert(machineVolume.Name)
 		}
+		if warning != "" {
+			warnings = append(warnings, warning)
+		}
 		if src != nil {
 			targetVolumes = append(targetVolumes, computev1alpha1.Volume{Name: machineVolume.Name, VolumeSource: *src})
 		}
+	}
+
+	if len(warnings) > 0 {
+		r.Eventf(machine, corev1.EventTypeWarning, events.FailedApplyingVolumes, "Failed applying volume(s): %v", warnings)
 	}
 
 	b.Add(func() {
@@ -338,29 +357,32 @@ func (r *MachineReconciler) machineNetworkInterfaceName(machine *computev1alpha1
 	return shared.MachineEphemeralNetworkInterfaceName(machine.Name, machineNic.Name)
 }
 
-func (r *MachineReconciler) targetNetworkInterfaceSource(ctx context.Context, machine, target *computev1alpha1.Machine, machineNic *computev1alpha1.NetworkInterface) (*computev1alpha1.NetworkInterfaceSource, bool, error) {
+func (r *MachineReconciler) targetNetworkInterfaceSource(ctx context.Context, machine, target *computev1alpha1.Machine, machineNic *computev1alpha1.NetworkInterface) (src *computev1alpha1.NetworkInterfaceSource, ok bool, warning string, err error) {
 	switch {
 	case machineNic.NetworkInterfaceRef != nil || machineNic.Ephemeral != nil:
 		status, ok := r.findMachineNetworkInterfaceStatus(machine, machineNic.Name)
 		if !ok || status.Phase != computev1alpha1.NetworkInterfacePhaseBound {
-			return nil, false, nil
+			return nil, false, "", nil
 		}
 
 		nicKey := client.ObjectKey{Namespace: machine.Namespace, Name: r.machineNetworkInterfaceName(machine, machineNic)}
 		targetNic := &networkingv1alpha1.NetworkInterface{}
 		if err := r.Provider.Target(ctx, nicKey, targetNic); err != nil {
 			if !brokererrors.IsNotSyncedOrNotFound(err) {
-				return nil, false, fmt.Errorf("error getting network interface %s target: %w", nicKey, err)
+				return nil, false, "", fmt.Errorf("error getting network interface %s target: %w", nicKey, err)
 			}
-			return nil, false, nil
+			if apierrors.IsNotFound(err) {
+				return nil, false, fmt.Sprintf("network interface %s not found", nicKey.Name), nil
+			}
+			return nil, false, "", nil
 		}
 		return &computev1alpha1.NetworkInterfaceSource{
 			NetworkInterfaceRef: &corev1.LocalObjectReference{
 				Name: targetNic.Name,
 			},
-		}, true, nil
+		}, true, "", nil
 	default:
-		return nil, false, fmt.Errorf("unrecognized network interface %#v", machineNic)
+		return nil, false, "", fmt.Errorf("unrecognized network interface %#v", machineNic)
 	}
 }
 
@@ -371,20 +393,28 @@ func (r *MachineReconciler) registerNetworkInterfacesMutation(ctx context.Contex
 		// In these cases, we want to keep any value that is there.
 		unhandledNames = sets.NewString()
 		targetNics     []computev1alpha1.NetworkInterface
+		warnings       []string
 	)
 	for _, machineNic := range machine.Spec.NetworkInterfaces {
-		src, ok, err := r.targetNetworkInterfaceSource(ctx, machine, target, &machineNic)
+		src, ok, warning, err := r.targetNetworkInterfaceSource(ctx, machine, target, &machineNic)
 		if err != nil {
 			return fmt.Errorf("[network interface %s] %w", machineNic.Name, err)
 		}
-
 		if !ok {
 			b.PartialSync = true
 			unhandledNames.Insert(machineNic.Name)
 		}
+		if warning != "" {
+			warnings = append(warnings, warning)
+		}
+
 		if src != nil {
 			targetNics = append(targetNics, computev1alpha1.NetworkInterface{Name: machineNic.Name, NetworkInterfaceSource: *src})
 		}
+	}
+
+	if len(warnings) > 0 {
+		r.Eventf(machine, corev1.EventTypeWarning, events.FailedApplyingNetworkInterfaces, "Failed applying network interface(s): %v", warnings)
 	}
 
 	b.Add(func() {

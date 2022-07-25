@@ -30,6 +30,7 @@ import (
 	"github.com/onmetal/poollet/broker"
 	"github.com/onmetal/poollet/broker/builder"
 	brokerclient "github.com/onmetal/poollet/broker/client"
+	"github.com/onmetal/poollet/broker/controllers/networking/events"
 	"github.com/onmetal/poollet/broker/domain"
 	brokererrors "github.com/onmetal/poollet/broker/errors"
 	"github.com/onmetal/poollet/broker/provider"
@@ -37,6 +38,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -46,6 +48,7 @@ import (
 )
 
 type NetworkInterfaceReconciler struct {
+	record.EventRecorder
 	Provider provider.Provider
 
 	client.Client
@@ -136,6 +139,9 @@ func (r *NetworkInterfaceReconciler) registerNetworkMutation(ctx context.Context
 		if !brokererrors.IsNotSyncedOrNotFound(err) {
 			return fmt.Errorf("error getting network %s target key: %w", networkKey, err)
 		}
+		if apierrors.IsNotFound(err) {
+			r.Eventf(nic, corev1.EventTypeWarning, events.FailedApplyingNetworkInterface, "Network %s not found", networkKey.Name)
+		}
 		b.PartialSync = true
 		return nil
 	}
@@ -159,6 +165,9 @@ func (r *NetworkInterfaceReconciler) registerMachineMutation(ctx context.Context
 	if err := r.Provider.Target(ctx, machineKey, targetMachine); err != nil {
 		if !brokererrors.IsNotSyncedOrNotFound(err) {
 			return fmt.Errorf("error getting machine %s target key: %w", machineKey, err)
+		}
+		if apierrors.IsNotFound(err) {
+			r.Eventf(nic, corev1.EventTypeNormal, events.FailedSyncingNetworkInterfaceMachine, "Machine %s not found", machineKey.Name)
 		}
 		// Since we don't depend on a machine to be synced yet, we just set it to empty.
 		b.Add(func() {

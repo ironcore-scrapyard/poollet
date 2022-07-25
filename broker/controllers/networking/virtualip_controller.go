@@ -26,6 +26,7 @@ import (
 	networkingfields "github.com/onmetal/poollet/api/networking/index/fields"
 	"github.com/onmetal/poollet/broker"
 	brokerclient "github.com/onmetal/poollet/broker/client"
+	"github.com/onmetal/poollet/broker/controllers/networking/events"
 	"github.com/onmetal/poollet/broker/domain"
 	brokererrors "github.com/onmetal/poollet/broker/errors"
 	"github.com/onmetal/poollet/broker/provider"
@@ -33,12 +34,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 type VirtualIPReconciler struct {
+	record.EventRecorder
 	Provider provider.Provider
 
 	client.Client
@@ -137,6 +140,7 @@ func (r *VirtualIPReconciler) registerTargetRefMutation(ctx context.Context, vir
 		if !brokererrors.IsNotSyncedOrNotFound(err) {
 			return fmt.Errorf("error getting network interface %s target: %w", nicKey, err)
 		}
+		r.Eventf(virtualIP, corev1.EventTypeNormal, events.FailedSyncingVirtualIPTarget, "Target network interface %s not found", nicKey.Name)
 		// Since we don't depend on a network interface to be synced, we just set it to empty.
 		b.Add(func() {
 			target.Spec.TargetRef = nil

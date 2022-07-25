@@ -113,15 +113,15 @@ func MachineSpecSecretNames(machine *computev1alpha1.Machine) sets.String {
 		names.Insert(imagePullSecretRef.Name)
 	}
 
+	if ignitionRef := machine.Spec.IgnitionRef; ignitionRef != nil {
+		names.Insert(ignitionRef.Name)
+	}
+
 	return names
 }
 
 func MachineSpecConfigMapNames(machine *computev1alpha1.Machine) sets.String {
 	names := sets.NewString()
-
-	if ignitionRef := machine.Spec.IgnitionRef; ignitionRef != nil {
-		names.Insert(ignitionRef.Name)
-	}
 
 	return names
 }

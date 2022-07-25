@@ -322,6 +322,7 @@ func main() {
 	}
 
 	networkInterfaceReconciler := &brokernetworking.NetworkInterfaceReconciler{
+		EventRecorder:   mgr.GetEventRecorderFor("networkinterfaces"),
 		Provider:        prov,
 		Client:          mgr.GetClient(),
 		APIReader:       mgr.GetAPIReader(),
@@ -338,6 +339,7 @@ func main() {
 	}
 
 	aliasPrefixReconciler := &brokernetworking.AliasPrefixReconciler{
+		EventRecorder:   mgr.GetEventRecorderFor("aliasprefixes"),
 		Provider:        prov,
 		Client:          mgr.GetClient(),
 		APIReader:       mgr.GetAPIReader(),
@@ -355,6 +357,7 @@ func main() {
 	}
 
 	virtualIPReconciler := &brokernetworking.VirtualIPReconciler{
+		EventRecorder:   mgr.GetEventRecorderFor("virtualips"),
 		Provider:        prov,
 		Client:          mgr.GetClient(),
 		APIReader:       mgr.GetAPIReader(),
@@ -371,6 +374,7 @@ func main() {
 	}
 
 	machineReconciler := &brokercompute.MachineReconciler{
+		EventRecorder:    mgr.GetEventRecorderFor("machines"),
 		Provider:         prov,
 		Client:           mgr.GetClient(),
 		APIReader:        mgr.GetAPIReader(),

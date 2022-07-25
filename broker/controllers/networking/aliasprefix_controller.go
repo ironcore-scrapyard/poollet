@@ -27,6 +27,7 @@ import (
 	networkingctrl "github.com/onmetal/poollet/api/networking/controller"
 	"github.com/onmetal/poollet/broker"
 	brokerclient "github.com/onmetal/poollet/broker/client"
+	"github.com/onmetal/poollet/broker/controllers/networking/events"
 	"github.com/onmetal/poollet/broker/domain"
 	brokererrors "github.com/onmetal/poollet/broker/errors"
 	brokermeta "github.com/onmetal/poollet/broker/meta"
@@ -36,6 +37,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -46,6 +48,7 @@ import (
 )
 
 type AliasPrefixReconciler struct {
+	record.EventRecorder
 	Provider provider.Provider
 
 	client.Client
@@ -152,6 +155,9 @@ func (r *AliasPrefixReconciler) registerNetworkRefMutation(ctx context.Context, 
 	if err := r.Provider.Target(ctx, networkKey, targetNetwork); err != nil {
 		if !brokererrors.IsNotSyncedOrNotFound(err) {
 			return fmt.Errorf("error getting network %s target: %w", networkKey, err)
+		}
+		if apierrors.IsNotFound(err) {
+			r.Eventf(aliasPrefix, corev1.EventTypeWarning, events.FailedApplyingAliasPrefix, "Network %s not found", networkKey.Name)
 		}
 
 		b.PartialSync = true
