@@ -55,7 +55,7 @@ var _ = Describe("NamespaceController", func() {
 		}).Should(Succeed())
 
 		By("inspecting the namespace")
-		Expect(targetNS.GenerateName).To(Equal(ns.Name))
+		Expect(targetNS.GenerateName).To(Equal(ns.Name + "-"))
 		Expect(brokermeta.IsBrokerControlledBy(clusterName, ns, targetNS)).To(BeTrue(), "target is not broker-controlled")
 
 		By("deleting the foo")

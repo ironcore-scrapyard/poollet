@@ -132,12 +132,17 @@ func (r *SecretReconciler) reconcile(ctx context.Context, log logr.Logger, secre
 	log.WithValues("TargetNamespace", targetNamespace)
 	log.V(1).Info("Determined target namespace")
 
+	log.V(1).Info("Ensuring finalizer")
+	requeue, err := clientutils.PatchEnsureFinalizer(ctx, r.Client, secret, r.finalizer())
+	if err != nil || requeue {
+		return ctrl.Result{Requeue: requeue}, err
+	}
+
 	targetSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: targetNamespace,
 			Name:      secret.Name,
 		},
-		Data: secret.Data,
 	}
 	log.V(1).Info("Applying target")
 	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, secret, targetSecret, func() error {
@@ -183,7 +188,7 @@ func (r *SecretReconciler) SetupWithManager(mgr broker.Manager) error {
 		For(&corev1.Secret{}).
 		OwnsTarget(&corev1.Secret{})
 
-	r.WatchDynamicReferences(b, &corev1.ConfigMap{})
+	r.WatchDynamicReferences(b, &corev1.Secret{})
 
 	return b.Complete(r)
 }

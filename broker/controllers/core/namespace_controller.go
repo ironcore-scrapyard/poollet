@@ -17,6 +17,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/onmetal/controller-utils/clientutils"
@@ -168,12 +169,16 @@ func (r *NamespaceReconciler) delete(ctx context.Context, log logr.Logger, ns *c
 // namespace. If so, it uses the 'grandparent' owner's name to make the relation easier to see.
 // Otherwise, the name of the source namespace will be used as GenerateName for the target namespace.
 func (r *NamespaceReconciler) getTargetNamespaceGenerateName(ns *corev1.Namespace) string {
+	var name string
 	if brokerCtrl := brokermeta.GetBrokerControllerOf(ns); brokerCtrl != nil &&
 		brokerCtrl.APIVersion == corev1.SchemeGroupVersion.String() &&
 		brokerCtrl.Kind == "Namespace" {
-		return brokerCtrl.Name
+		name = brokerCtrl.Name
+	} else {
+		name = ns.Name
 	}
-	return ns.Name
+	name = strings.TrimSuffix(name, "-")
+	return name + "-"
 }
 
 func (r *NamespaceReconciler) reconcile(ctx context.Context, log logr.Logger, ns *corev1.Namespace) (ctrl.Result, error) {

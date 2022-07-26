@@ -132,6 +132,12 @@ func (r *ConfigMapReconciler) reconcile(ctx context.Context, log logr.Logger, co
 	log.WithValues("TargetNamespace", targetNamespace)
 	log.V(1).Info("Determined target namespace")
 
+	log.V(1).Info("Ensuring finalizer")
+	requeue, err := clientutils.PatchEnsureFinalizer(ctx, r.Client, configMap, r.finalizer())
+	if err != nil || requeue {
+		return ctrl.Result{Requeue: requeue}, err
+	}
+
 	targetConfigMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: targetNamespace,

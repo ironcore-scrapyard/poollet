@@ -46,6 +46,7 @@ import (
 
 const (
 	clusterName = "test-cluster"
+	poolName    = "test-pool"
 )
 
 var (
@@ -105,7 +106,7 @@ func SetupFooToTypeField(ctx context.Context, cluster brokercluster.Cluster, ref
 		return "", err
 	}
 
-	field := strings.ToLower(referredGVK.GroupVersion().String()) + "-name"
+	field := strings.ToLower(referredGVK.GroupKind().String()) + "-name"
 
 	return field, cluster.GetFieldIndexer().IndexField(ctx, &testdatav1.Foo{}, field, func(object client.Object) []string {
 		foo := object.(*testdatav1.Foo)
@@ -157,6 +158,9 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 		fooSecretField, err := SetupFooToTypeField(ctx, k8sManager, &corev1.Secret{})
 		Expect(err).NotTo(HaveOccurred())
 
+		fooConfigMapField, err := SetupFooToTypeField(ctx, k8sManager, &corev1.ConfigMap{})
+		Expect(err).NotTo(HaveOccurred())
+
 		// Setup provider
 		*providerRegistry = *provider.NewRegistry(scheme.Scheme)
 
@@ -169,6 +173,7 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 			Scheme:          k8sManager.GetScheme(),
 			NamespacePrefix: "target-",
 			ClusterName:     clusterName,
+			PoolName:        poolName,
 			Domain:          domain,
 		}
 		namespaceReconciler.Dependent(&testdatav1.Foo{})
@@ -182,11 +187,26 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 			TargetClient: k8sManager.GetBrokerClient(),
 			Scheme:       k8sManager.GetScheme(),
 			ClusterName:  clusterName,
+			PoolName:     poolName,
 			Domain:       domain,
 		}
 		Expect(secretReconciler.SetupWithManager(k8sManager)).To(Succeed())
 		Expect(providerRegistry.Register(&corev1.Secret{}, secretReconciler)).To(Succeed())
 		secretReconciler.Dependent(&testdatav1.Foo{}, fooSecretField)
+
+		configMapReconciler := &core.ConfigMapReconciler{
+			Provider:     providerRegistry,
+			Client:       k8sManager.GetBrokerClient(),
+			APIReader:    k8sManager.GetAPIReader(),
+			TargetClient: k8sManager.GetBrokerClient(),
+			Scheme:       k8sManager.GetScheme(),
+			ClusterName:  clusterName,
+			PoolName:     poolName,
+			Domain:       domain,
+		}
+		Expect(configMapReconciler.SetupWithManager(k8sManager)).To(Succeed())
+		Expect(providerRegistry.Register(&corev1.ConfigMap{}, configMapReconciler)).To(Succeed())
+		configMapReconciler.Dependent(&testdatav1.Foo{}, fooConfigMapField)
 
 		go func() {
 			defer GinkgoRecover()

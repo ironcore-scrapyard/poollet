@@ -41,55 +41,8 @@ func AndMachinePredicate(predicates ...MachinePredicate) MachinePredicate {
 	}
 }
 
-func OrMachinePredicate(predicates ...MachinePredicate) MachinePredicate {
-	return func(machine *computev1alpha1.Machine) bool {
-		for _, predicate := range predicates {
-			if predicate(machine) {
-				return true
-			}
-		}
-		return false
-	}
-}
-
-func FilterMachines(machines []computev1alpha1.Machine, predicates ...MachinePredicate) []computev1alpha1.Machine {
-	var res []computev1alpha1.Machine
-	for _, machine := range machines {
-		if AndMachinePredicate(predicates...)(&machine) {
-			res = append(res, machine)
-		}
-	}
-	return res
-}
-
-func FindMachine(machines []computev1alpha1.Machine, predicates ...MachinePredicate) *computev1alpha1.Machine {
-	for i := range machines {
-		machine := &machines[i]
-		if AndMachinePredicate(predicates...)(machine) {
-			return machine
-		}
-	}
-	return nil
-}
-
-func ByMachineRunningInMachinePool(poolName string) MachinePredicate {
-	return func(machine *computev1alpha1.Machine) bool {
-		return MachineRunsInMachinePool(machine, poolName)
-	}
-}
-
 func MachineSpecVolumeNames(machine *computev1alpha1.Machine) sets.String {
 	return shared.MachineSpecVolumeNames(machine)
-}
-
-func MachineSpecReferencesVolumeName(machine *computev1alpha1.Machine, volumeName string) bool {
-	return MachineSpecVolumeNames(machine).Has(volumeName)
-}
-
-func ByMachineSpecReferencingVolume(volumeName string) MachinePredicate {
-	return func(machine *computev1alpha1.Machine) bool {
-		return MachineSpecReferencesVolumeName(machine, volumeName)
-	}
 }
 
 func MachineSpecNetworkInterfaceNames(machine *computev1alpha1.Machine) sets.String {
@@ -98,12 +51,6 @@ func MachineSpecNetworkInterfaceNames(machine *computev1alpha1.Machine) sets.Str
 
 func MachineSpecReferencesNetworkInterfaceName(machine *computev1alpha1.Machine, nicName string) bool {
 	return MachineSpecNetworkInterfaceNames(machine).Has(nicName)
-}
-
-func ByMachineSpecReferencingNetworkInterface(nicName string) MachinePredicate {
-	return func(machine *computev1alpha1.Machine) bool {
-		return MachineSpecReferencesNetworkInterfaceName(machine, nicName)
-	}
 }
 
 func MachineSpecSecretNames(machine *computev1alpha1.Machine) sets.String {

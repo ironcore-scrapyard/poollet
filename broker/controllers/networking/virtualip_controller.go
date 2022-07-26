@@ -140,7 +140,9 @@ func (r *VirtualIPReconciler) registerTargetRefMutation(ctx context.Context, vir
 		if !brokererrors.IsNotSyncedOrNotFound(err) {
 			return fmt.Errorf("error getting network interface %s target: %w", nicKey, err)
 		}
-		r.Eventf(virtualIP, corev1.EventTypeNormal, events.FailedSyncingVirtualIPTarget, "Target network interface %s not found", nicKey.Name)
+		if apierrors.IsNotFound(err) {
+			r.Eventf(virtualIP, corev1.EventTypeNormal, events.FailedSyncingVirtualIPTarget, "Target network interface %s not found", nicKey.Name)
+		}
 		// Since we don't depend on a network interface to be synced, we just set it to empty.
 		b.Add(func() {
 			target.Spec.TargetRef = nil

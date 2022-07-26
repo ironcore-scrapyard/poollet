@@ -26,24 +26,24 @@ import (
 	. "sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
-var _ = Describe("SecretController", func() {
+var _ = Describe("ConfigMapController", func() {
 	ctx := SetupContext()
 	ns, prov := SetupTest(ctx)
 
-	It("should sync secrets when referenced", func() {
-		By("creating a secret")
-		secret := &corev1.Secret{
+	It("should sync config map when referenced", func() {
+		By("creating a config map")
+		configMap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:    ns.Name,
-				GenerateName: "secret-",
+				GenerateName: "configmap-",
 			},
-			Data: map[string][]byte{
-				"foo": []byte("bar"),
+			Data: map[string]string{
+				"foo": "bar",
 			},
 		}
-		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+		Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
 
-		By("creating a foo referencing the secret")
+		By("creating a foo referencing the config map")
 		foo := &testdatav1.Foo{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:    ns.Name,
@@ -52,42 +52,42 @@ var _ = Describe("SecretController", func() {
 			Spec: testdatav1.FooSpec{
 				Ref: &corev1.ObjectReference{
 					APIVersion: corev1.SchemeGroupVersion.String(),
-					Kind:       "Secret",
-					Name:       secret.Name,
+					Kind:       "ConfigMap",
+					Name:       configMap.Name,
 				},
 			},
 		}
 		Expect(k8sClient.Create(ctx, foo)).To(Succeed())
 
 		By("waiting for the original secret to report finalizers")
-		Eventually(Object(secret)).Should(
-			HaveField("ObjectMeta.Finalizers", ConsistOf(domain.Subdomain(poolName).Slash("secret"))),
+		Eventually(Object(configMap)).Should(
+			HaveField("ObjectMeta.Finalizers", ConsistOf(domain.Subdomain(poolName).Slash("configmap"))),
 		)
 
-		By("waiting for the secret to be synced")
-		secretKey := client.ObjectKeyFromObject(secret)
-		targetSecret := &corev1.Secret{}
+		By("waiting for the config map to be synced")
+		configMapKey := client.ObjectKeyFromObject(configMap)
+		targetConfigMap := &corev1.ConfigMap{}
 		Eventually(func() error {
-			return prov.Target(ctx, secretKey, targetSecret)
+			return prov.Target(ctx, configMapKey, targetConfigMap)
 		}).Should(Succeed())
 
-		By("inspecting the synced secret")
-		Expect(targetSecret.Namespace).NotTo(Equal(secret.Namespace))
-		Expect(brokermeta.IsBrokerControlledBy(clusterName, secret, targetSecret)).To(BeTrue(), "secret is not broker-controlled")
-		Expect(targetSecret.Data).To(Equal(secret.Data))
+		By("inspecting the synced config map")
+		Expect(targetConfigMap.Namespace).NotTo(Equal(configMap.Namespace))
+		Expect(brokermeta.IsBrokerControlledBy(clusterName, configMap, targetConfigMap)).To(BeTrue(), "config map is not broker-controlled")
+		Expect(targetConfigMap.Data).To(Equal(configMap.Data))
 
-		By("updating the original secret")
-		baseSecret := secret.DeepCopy()
-		secret.Data = map[string][]byte{"foo": []byte("baz")}
-		Expect(k8sClient.Patch(ctx, secret, client.MergeFrom(baseSecret))).To(Succeed())
+		By("updating the original config map")
+		baseConfigMap := configMap.DeepCopy()
+		configMap.Data = map[string]string{"foo": "baz"}
+		Expect(k8sClient.Patch(ctx, configMap, client.MergeFrom(baseConfigMap))).To(Succeed())
 
-		By("waiting for the synced secret to be updated")
-		Eventually(Object(targetSecret)).Should(HaveField("Data", Equal(secret.Data)))
+		By("waiting for the synced config map to be updated")
+		Eventually(Object(targetConfigMap)).Should(HaveField("Data", Equal(configMap.Data)))
 
-		By("deleting the foo referencing the secret")
+		By("deleting the foo referencing the config map")
 		Expect(k8sClient.Delete(ctx, foo)).To(Succeed())
 
-		//By("waiting for the synced secret to be gone")
-		//Eventually(Get(targetSecret)).Should(Satisfy(apierrors.IsNotFound))
+		//By("waiting for the synced config map to be gone")
+		//Eventually(Get(targetConfigMap)).Should(Satisfy(apierrors.IsNotFound))
 	})
 })
