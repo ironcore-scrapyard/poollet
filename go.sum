@@ -361,8 +361,8 @@ github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e/go.mod h1:zD1mROLA
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
-github.com/onmetal/controller-utils v0.6.2 h1:6aSWQCb29BGVFU7fQhSkjCMl3vFFNKP7Nk5zH9nDRR4=
-github.com/onmetal/controller-utils v0.6.2/go.mod h1:nTYWVk9eINfeyTbXbuu8tORUHrfP21kHM3N3CWGsAnM=
+github.com/onmetal/controller-utils v0.6.3 h1:VRZt9ubnbnF/v7ADP+3uOKqaR8LRLFdKtn76hQ8mTRs=
+github.com/onmetal/controller-utils v0.6.3/go.mod h1:U5AzcYhIjRIcMMFkYaoLGQRt5CDwF/FQcD91a9nGsYE=
 github.com/onmetal/onmetal-api v0.0.13-0.20220725064615-1fdb64e0cb1a h1:YM0CMLRC1ji56zAKbA/w0w66b4QVHujAUtj4JdRSGxg=
 github.com/onmetal/onmetal-api v0.0.13-0.20220725064615-1fdb64e0cb1a/go.mod h1:f3xS9myih2B5ag0lyuHuDRnboUXwo3qhw0ccpiLMEH8=
 github.com/onsi/ginkgo v0.0.0-20170829012221-11459a886d9c/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
