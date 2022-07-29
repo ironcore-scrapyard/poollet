@@ -7,7 +7,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/addlicense v1.0.0
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/onmetal/controller-utils v0.6.2
+	github.com/onmetal/controller-utils v0.6.3
 	github.com/onmetal/onmetal-api v0.0.13-0.20220725064615-1fdb64e0cb1a
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
