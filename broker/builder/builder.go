@@ -416,8 +416,8 @@ func (b *Builder) doWatch(c brokercontroller.Controller) error {
 	for _, ref := range b.referencesViaFieldInput {
 		src := &source.Kind{Type: ref.object}
 		hdler := &poollethandler.EnqueueRequestByFieldReference{
-			ReferentType: b.forInput.object,
-			Field:        ref.field,
+			Type:  b.forInput.object,
+			Field: ref.field,
 		}
 		allPredicates := b.predicates(ref.predicates)
 		if err := c.Watch(src, hdler, allPredicates...); err != nil {

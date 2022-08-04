@@ -25,6 +25,7 @@ import (
 	brokercluster "github.com/onmetal/poollet/broker/cluster"
 	brokercontrollerscommon "github.com/onmetal/poollet/broker/controllers/common"
 	"github.com/onmetal/poollet/broker/controllers/core"
+	"github.com/onmetal/poollet/broker/dependents/builder"
 	brokermeta "github.com/onmetal/poollet/broker/meta"
 	"github.com/onmetal/poollet/broker/provider"
 	testdatav1 "github.com/onmetal/poollet/testdata/api/v1"
@@ -100,15 +101,15 @@ var _ = BeforeSuite(func() {
 	SetClient(k8sClient)
 })
 
-func SetupFooToTypeField(ctx context.Context, cluster brokercluster.Cluster, referredType client.Object) (string, error) {
+func SetupFooToTypeField(ctx context.Context, cluster brokercluster.Cluster, referredType client.Object) (string, client.IndexerFunc, error) {
 	referredGVK, err := apiutil.GVKForObject(referredType, cluster.GetScheme())
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	field := strings.ToLower(referredGVK.GroupKind().String()) + "-name"
 
-	return field, cluster.GetFieldIndexer().IndexField(ctx, &testdatav1.Foo{}, field, func(object client.Object) []string {
+	indexerFunc := func(object client.Object) []string {
 		foo := object.(*testdatav1.Foo)
 		ref := foo.Spec.Ref
 		if ref == nil {
@@ -124,7 +125,9 @@ func SetupFooToTypeField(ctx context.Context, cluster brokercluster.Cluster, ref
 			return []string{ref.Name}
 		}
 		return nil
-	})
+	}
+
+	return field, indexerFunc, cluster.GetFieldIndexer().IndexField(ctx, &testdatav1.Foo{}, field, indexerFunc)
 }
 
 func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
@@ -155,10 +158,10 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		fooSecretField, err := SetupFooToTypeField(ctx, k8sManager, &corev1.Secret{})
+		fooSecretField, extractFooSecret, err := SetupFooToTypeField(ctx, k8sManager, &corev1.Secret{})
 		Expect(err).NotTo(HaveOccurred())
 
-		fooConfigMapField, err := SetupFooToTypeField(ctx, k8sManager, &corev1.ConfigMap{})
+		fooConfigMapField, extractFooConfigMap, err := SetupFooToTypeField(ctx, k8sManager, &corev1.ConfigMap{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Setup provider
@@ -176,7 +179,12 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 			PoolName:        poolName,
 			Domain:          domain,
 		}
-		namespaceReconciler.Dependent(&testdatav1.Foo{})
+		Expect(
+			builder.NewDependentFor(namespaceReconciler).
+				Referent(&testdatav1.Foo{}).
+				NamespaceReference().
+				Complete(),
+		).To(Succeed())
 		Expect(namespaceReconciler.SetupWithManager(k8sManager)).To(Succeed())
 		Expect(providerRegistry.Register(&corev1.Namespace{}, namespaceReconciler)).To(Succeed())
 
@@ -190,9 +198,15 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 			PoolName:     poolName,
 			Domain:       domain,
 		}
+		Expect(
+			builder.NewDependentFor(secretReconciler).
+				Referent(&testdatav1.Foo{}).
+				Referenced(&corev1.Secret{}).
+				FieldReference(fooSecretField, extractFooSecret).
+				Complete(),
+		).To(Succeed())
 		Expect(secretReconciler.SetupWithManager(k8sManager)).To(Succeed())
 		Expect(providerRegistry.Register(&corev1.Secret{}, secretReconciler)).To(Succeed())
-		secretReconciler.Dependent(&testdatav1.Foo{}, fooSecretField)
 
 		configMapReconciler := &core.ConfigMapReconciler{
 			Provider:     providerRegistry,
@@ -204,9 +218,15 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 			PoolName:     poolName,
 			Domain:       domain,
 		}
+		Expect(
+			builder.NewDependentFor(configMapReconciler).
+				Referent(&testdatav1.Foo{}).
+				Referenced(&corev1.ConfigMap{}).
+				FieldReference(fooConfigMapField, extractFooConfigMap).
+				Complete(),
+		).To(Succeed())
 		Expect(configMapReconciler.SetupWithManager(k8sManager)).To(Succeed())
 		Expect(providerRegistry.Register(&corev1.ConfigMap{}, configMapReconciler)).To(Succeed())
-		configMapReconciler.Dependent(&testdatav1.Foo{}, fooConfigMapField)
 
 		go func() {
 			defer GinkgoRecover()

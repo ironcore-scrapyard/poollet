@@ -30,8 +30,8 @@ import (
 var enqueueRequestByFieldReferenceLog = logf.Log.WithName("handler").WithName("EnqueueRequestByFieldReference")
 
 type EnqueueRequestByFieldReference struct {
-	ReferentType client.Object
-	Field        string
+	Type  client.Object
+	Field string
 
 	client           client.Client
 	baseReferentList client.ObjectList
@@ -42,12 +42,12 @@ func (e *EnqueueRequestByFieldReference) InjectClient(c client.Client) error {
 	e.client = c
 
 	var err error
-	e.baseReferentList, err = metautils.NewListForObject(e.client.Scheme(), e.ReferentType)
+	e.baseReferentList, err = metautils.NewListForObject(e.client.Scheme(), e.Type)
 	if err != nil {
 		return fmt.Errorf("error getting list for object: %w", err)
 	}
 
-	e.referentGVK, err = apiutil.GVKForObject(e.ReferentType, e.client.Scheme())
+	e.referentGVK, err = apiutil.GVKForObject(e.Type, e.client.Scheme())
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func (e *EnqueueRequestByFieldReference) InjectClient(c client.Client) error {
 
 func (e *EnqueueRequestByFieldReference) handle(obj client.Object, reqs RequestSet) {
 	ctx := context.TODO()
-	log := enqueueRequestByFieldReferenceLog.WithValues("ReferentType", e.referentGVK.GroupKind())
+	log := enqueueRequestByFieldReferenceLog.WithValues("Type", e.referentGVK.GroupKind())
 
 	list := e.baseReferentList.DeepCopyObject().(client.ObjectList)
 

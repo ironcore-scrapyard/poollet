@@ -40,6 +40,11 @@ var _ = Describe("NamespaceController", func() {
 			return provider.Target(ctx, client.ObjectKey{Name: ns.Name}, targetNS)
 		}).Should(Satisfy(errors.IsNotSynced))
 
+		By("asserting the original namespace does not get a finalizer")
+		Consistently(Object(ns)).ShouldNot(
+			HaveField("ObjectMeta.Finalizers", ContainElement(domain.Subdomain(poolName).Slash("namespace"))),
+		)
+
 		By("creating a foo in the namespace, causing usage of the namespace")
 		foo := &testdatav1.Foo{
 			ObjectMeta: metav1.ObjectMeta{

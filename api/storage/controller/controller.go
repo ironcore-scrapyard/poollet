@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func IsVolumeUsedLive(ctx context.Context, r client.Reader, volume *storagev1alpha1.Volume, machinePoolName string) (bool, error) {
+func IsVolumeUsedByMachineInMachinePoolLive(ctx context.Context, r client.Reader, volume *storagev1alpha1.Volume, machinePoolName string) (bool, error) {
 	claimRef := volume.Spec.ClaimRef
 	if claimRef == nil {
 		return false, nil
@@ -43,7 +43,7 @@ func IsVolumeUsedLive(ctx context.Context, r client.Reader, volume *storagev1alp
 		nil
 }
 
-func IsVolumeUsedCached(ctx context.Context, c client.Client, volume *storagev1alpha1.Volume, machinePoolName string) (bool, error) {
+func IsVolumeUsedByMachineInMachinePoolCached(ctx context.Context, c client.Client, volume *storagev1alpha1.Volume, machinePoolName string) (bool, error) {
 	claimRef := volume.Spec.ClaimRef
 	if claimRef == nil {
 		return false, nil
@@ -62,10 +62,10 @@ func IsVolumeUsedCached(ctx context.Context, c client.Client, volume *storagev1a
 }
 
 func IsVolumeUsedCachedOrLive(ctx context.Context, r client.Reader, c client.Client, volume *storagev1alpha1.Volume, machinePoolName string) (bool, error) {
-	if ok, err := IsVolumeUsedCached(ctx, c, volume, machinePoolName); err != nil || ok {
+	if ok, err := IsVolumeUsedByMachineInMachinePoolCached(ctx, c, volume, machinePoolName); err != nil || ok {
 		return ok, err
 	}
-	if ok, err := IsVolumeUsedLive(ctx, r, volume, machinePoolName); err != nil || ok {
+	if ok, err := IsVolumeUsedByMachineInMachinePoolLive(ctx, r, volume, machinePoolName); err != nil || ok {
 		return ok, err
 	}
 	return false, nil

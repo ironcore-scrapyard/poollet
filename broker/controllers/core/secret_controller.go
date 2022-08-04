@@ -36,7 +36,7 @@ import (
 )
 
 type SecretReconciler struct {
-	brokerreconcile.Dependents
+	brokerreconcile.Mixin
 
 	Provider provider.Provider
 
@@ -73,7 +73,7 @@ func (r *SecretReconciler) reconcileExists(ctx context.Context, log logr.Logger,
 		return r.delete(ctx, log, secret)
 	}
 
-	ok, err := r.IsReferenced(ctx, r.APIReader, r.Client, secret)
+	ok, err := r.IsReferenced(ctx, secret)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -188,7 +188,9 @@ func (r *SecretReconciler) SetupWithManager(mgr broker.Manager) error {
 		For(&corev1.Secret{}).
 		OwnsTarget(&corev1.Secret{})
 
-	r.WatchDynamicReferences(b, &corev1.Secret{})
+	if err := r.WatchDynamicReferences(b, mgr); err != nil {
+		return err
+	}
 
 	return b.Complete(r)
 }

@@ -36,7 +36,7 @@ import (
 )
 
 type ConfigMapReconciler struct {
-	brokerreconcile.Dependents
+	brokerreconcile.Mixin
 
 	Provider provider.Provider
 
@@ -73,7 +73,7 @@ func (r *ConfigMapReconciler) reconcileExists(ctx context.Context, log logr.Logg
 		return r.delete(ctx, log, configMap)
 	}
 
-	ok, err := r.IsReferenced(ctx, r.APIReader, r.Client, configMap)
+	ok, err := r.IsReferenced(ctx, configMap)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -188,7 +188,9 @@ func (r *ConfigMapReconciler) SetupWithManager(mgr broker.Manager) error {
 		For(&corev1.ConfigMap{}).
 		OwnsTarget(&corev1.ConfigMap{})
 
-	r.WatchDynamicReferences(b, &corev1.ConfigMap{})
+	if err := r.WatchDynamicReferences(b, mgr); err != nil {
+		return err
+	}
 
 	return b.Complete(r)
 }
