@@ -55,22 +55,26 @@ func MachineNetworkInterfaceNamesField(ctx context.Context, fieldIndexer client.
 	})
 }
 
+func ExtractMachineSecretNames(obj client.Object) []string {
+	machine := obj.(*computev1alpha1.Machine)
+	if names := helper.MachineSpecSecretNames(machine); len(names) > 0 {
+		return names.UnsortedList()
+	}
+	return []string{""}
+}
+
 func MachineSecretNamesField(ctx context.Context, fieldIndexer client.FieldIndexer) error {
-	return fieldIndexer.IndexField(ctx, &computev1alpha1.Machine{}, fields.MachineSpecSecretNames, func(obj client.Object) []string {
-		machine := obj.(*computev1alpha1.Machine)
-		if names := helper.MachineSpecSecretNames(machine); len(names) > 0 {
-			return names.UnsortedList()
-		}
-		return []string{""}
-	})
+	return fieldIndexer.IndexField(ctx, &computev1alpha1.Machine{}, fields.MachineSpecSecretNames, ExtractMachineSecretNames)
+}
+
+func ExtractMachineConfigMapNames(obj client.Object) []string {
+	machine := obj.(*computev1alpha1.Machine)
+	if names := helper.MachineSpecConfigMapNames(machine); len(names) > 0 {
+		return names.UnsortedList()
+	}
+	return []string{""}
 }
 
 func MachineConfigMapNamesField(ctx context.Context, fieldIndexer client.FieldIndexer) error {
-	return fieldIndexer.IndexField(ctx, &computev1alpha1.Machine{}, fields.MachineSpecConfigMapNames, func(obj client.Object) []string {
-		machine := obj.(*computev1alpha1.Machine)
-		if names := helper.MachineSpecConfigMapNames(machine); len(names) > 0 {
-			return names.UnsortedList()
-		}
-		return []string{""}
-	})
+	return fieldIndexer.IndexField(ctx, &computev1alpha1.Machine{}, fields.MachineSpecConfigMapNames, ExtractMachineConfigMapNames)
 }

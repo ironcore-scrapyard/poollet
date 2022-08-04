@@ -25,13 +25,11 @@ import (
 	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
 	networkingv1alpha1 "github.com/onmetal/onmetal-api/apis/networking/v1alpha1"
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+	computedependent "github.com/onmetal/poollet/api/compute/dependent"
 	computeindex "github.com/onmetal/poollet/api/compute/index"
-	computefields "github.com/onmetal/poollet/api/compute/index/fields"
-	computepredicate "github.com/onmetal/poollet/api/compute/predicate"
 	networkingindex "github.com/onmetal/poollet/api/networking/index"
+	storagedependent "github.com/onmetal/poollet/api/storage/dependent"
 	storageindex "github.com/onmetal/poollet/api/storage/index"
-	storagefields "github.com/onmetal/poollet/api/storage/index/fields"
-	storagepredicate "github.com/onmetal/poollet/api/storage/predicate"
 	"github.com/onmetal/poollet/broker"
 	brokercluster "github.com/onmetal/poollet/broker/cluster"
 	brokercompute "github.com/onmetal/poollet/broker/controllers/compute"
@@ -210,8 +208,12 @@ func main() {
 		PoolName:        poolName,
 		Domain:          partitionletcontrollerscommon.Domain,
 	}
-	namespaceReconciler.Dependent(&storagev1alpha1.Volume{}, storagepredicate.VolumeRunsInVolumePoolPredicate(poolName))
-	namespaceReconciler.Dependent(&computev1alpha1.Machine{}, computepredicate.MachineRunsInMachinePoolPredicate(poolName))
+	if err := computedependent.SetupMachineToNamespace(namespaceReconciler, poolName); err != nil {
+		logErrAndExit(err, "unable to set up dependent", "controller", "Namespace", "dependent", "Machine")
+	}
+	if err := storagedependent.SetupVolumeToNamespace(namespaceReconciler, poolName); err != nil {
+		logErrAndExit(err, "unable to set up dependent", "controller", "Namespace", "dependent", "Volujme")
+	}
 	if err = namespaceReconciler.SetupWithManager(mgr); err != nil {
 		logErrAndExit(err, "unable to set up controller", "controller", "Namespace")
 	}
@@ -229,8 +231,15 @@ func main() {
 		PoolName:     poolName,
 		Domain:       partitionletcontrollerscommon.Domain,
 	}
-	secretReconciler.Dependent(&storagev1alpha1.Volume{}, storagefields.VolumeSpecSecretNamesField, storagepredicate.VolumeRunsInVolumePoolPredicate(poolName))
-	secretReconciler.Dependent(&computev1alpha1.Machine{}, computefields.MachineSpecSecretNames, computepredicate.MachineRunsInMachinePoolPredicate(poolName))
+	if err := storagedependent.SetupMachineVolumeToSecret(secretReconciler, poolName); err != nil {
+		logErrAndExit(err, "unable to set up dependent", "controller", "Secret", "dependent", "Volume")
+	}
+	if err := storagedependent.SetupVolumeToSecret(secretReconciler, poolName); err != nil {
+		logErrAndExit(err, "unable to set up dependent", "controller", "Secret", "dependent", "Volume")
+	}
+	if err := computedependent.SetupMachineToSecret(secretReconciler, poolName); err != nil {
+		logErrAndExit(err, "unable to set up dependent", "controller", "Secret", "dependent", "Machine")
+	}
 	if err = secretReconciler.SetupWithManager(mgr); err != nil {
 		logErrAndExit(err, "unable to set up controller", "controller", "Secret")
 	}
@@ -248,7 +257,9 @@ func main() {
 		PoolName:     poolName,
 		Domain:       partitionletcontrollerscommon.Domain,
 	}
-	configMapReconciler.Dependent(&computev1alpha1.Machine{}, computefields.MachineSpecConfigMapNames, computepredicate.MachineRunsInMachinePoolPredicate(poolName))
+	if err := computedependent.SetupMachineToConfigMap(configMapReconciler, poolName); err != nil {
+		logErrAndExit(err, "unable to set up dependent", "controller", "ConfigMap", "dependent", "Machine")
+	}
 	if err = configMapReconciler.SetupWithManager(mgr); err != nil {
 		logErrAndExit(err, "unable to set up controller", "controller", "ConfigMap")
 	}

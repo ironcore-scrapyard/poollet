@@ -23,9 +23,8 @@ import (
 
 	"github.com/onmetal/controller-utils/configutils"
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+	storagedependent "github.com/onmetal/poollet/api/storage/dependent"
 	storageindex "github.com/onmetal/poollet/api/storage/index"
-	storagefields "github.com/onmetal/poollet/api/storage/index/fields"
-	storagepredicate "github.com/onmetal/poollet/api/storage/predicate"
 	"github.com/onmetal/poollet/broker"
 	brokercluster "github.com/onmetal/poollet/broker/cluster"
 	"github.com/onmetal/poollet/broker/controllers/core"
@@ -171,7 +170,9 @@ func main() {
 		PoolName:        poolName,
 		Domain:          proxyvolumebrokerletcontrollerscommon.Domain,
 	}
-	namespaceReconciler.Dependent(&storagev1alpha1.Volume{}, storagepredicate.VolumeRunsInVolumePoolPredicate(poolName))
+	if err := storagedependent.SetupVolumeToNamespace(namespaceReconciler, poolName); err != nil {
+		logErrAndExit(err, "unable to set up dependent", "controller", "Namespace", "dependent", "Volume")
+	}
 	if err = namespaceReconciler.SetupWithManager(mgr); err != nil {
 		logErrAndExit(err, "unable to set up controller", "controller", "Namespace")
 	}
@@ -189,7 +190,9 @@ func main() {
 		PoolName:     poolName,
 		Domain:       proxyvolumebrokerletcontrollerscommon.Domain,
 	}
-	secretReconciler.Dependent(&storagev1alpha1.Volume{}, storagefields.VolumeSpecSecretNamesField, storagepredicate.VolumeRunsInVolumePoolPredicate(poolName))
+	if err := storagedependent.SetupVolumeToSecret(secretReconciler, poolName); err != nil {
+		logErrAndExit(err, "unable to set up dependent", "controller", "Secret", "dependent", "Volume")
+	}
 	if err = secretReconciler.SetupWithManager(mgr); err != nil {
 		logErrAndExit(err, "unable to set up controller", "controller", "Secret")
 	}

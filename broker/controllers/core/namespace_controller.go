@@ -23,32 +23,22 @@ import (
 	"github.com/onmetal/controller-utils/clientutils"
 	"github.com/onmetal/controller-utils/metautils"
 	"github.com/onmetal/poollet/broker"
-	"github.com/onmetal/poollet/broker/builder"
 	brokerclient "github.com/onmetal/poollet/broker/client"
+	"github.com/onmetal/poollet/broker/dependents"
 	"github.com/onmetal/poollet/broker/domain"
 	brokererrors "github.com/onmetal/poollet/broker/errors"
 	brokermeta "github.com/onmetal/poollet/broker/meta"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-type namespaceReferent struct {
-	Type       client.Object
-	Predicates []predicate.Predicate
-}
-
 type NamespaceReconciler struct {
-	references []namespaceReferent
+	dependents.Mixin
 
 	client.Client
 	APIReader client.Reader
@@ -61,10 +51,6 @@ type NamespaceReconciler struct {
 	ClusterName     string
 	PoolName        string
 	Domain          domain.Domain
-}
-
-func (r *NamespaceReconciler) Dependent(obj client.Object, prct ...predicate.Predicate) {
-	r.references = append(r.references, namespaceReferent{Type: obj, Predicates: prct})
 }
 
 func (r *NamespaceReconciler) domain() domain.Domain {
@@ -91,47 +77,6 @@ func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	return r.reconcileExists(ctx, log, ns)
-}
-
-func (r *NamespaceReconciler) isUsed(ctx context.Context, ns *corev1.Namespace) (bool, error) {
-	if ok, err := r.isUsedCached(ctx, ns); err != nil || ok {
-		return ok, err
-	}
-	return r.isUsedLive(ctx, ns)
-}
-
-func (r *NamespaceReconciler) isUsedLive(ctx context.Context, ns *corev1.Namespace) (bool, error) {
-	for _, ref := range r.references {
-		list, err := metautils.NewListForObject(r.Scheme, ref.Type)
-		if err != nil {
-			return false, err
-		}
-		if err := r.APIReader.List(ctx, list, client.InNamespace(ns.Name), client.Limit(1)); err != nil {
-			return false, err
-		}
-
-		if meta.LenList(list) > 0 {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func (r *NamespaceReconciler) isUsedCached(ctx context.Context, ns *corev1.Namespace) (bool, error) {
-	for _, ref := range r.references {
-		list, err := metautils.NewListForObject(r.Scheme, ref.Type)
-		if err != nil {
-			return false, err
-		}
-		if err := r.List(ctx, list, client.InNamespace(ns.Name), client.Limit(1)); err != nil {
-			return false, err
-		}
-
-		if meta.LenList(list) > 0 {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func (r *NamespaceReconciler) reconcileExists(ctx context.Context, log logr.Logger, ns *corev1.Namespace) (ctrl.Result, error) {
@@ -194,7 +139,7 @@ func (r *NamespaceReconciler) reconcile(ctx context.Context, log logr.Logger, ns
 		}
 
 		log.V(1).Info("Target namespace not found, determining whether reconciliation is necessary")
-		ok, err := r.isUsed(ctx, ns)
+		ok, err := r.IsReferenced(ctx, ns)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("error checking whether namespace is used: %w", err)
 		}
@@ -260,14 +205,8 @@ func (r *NamespaceReconciler) SetupWithManager(mgr broker.Manager) error {
 		For(&corev1.Namespace{}).
 		OwnsTarget(&corev1.Namespace{})
 
-	for _, ref := range r.references {
-		b.Watches(
-			&source.Kind{Type: ref.Type},
-			handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
-				return []reconcile.Request{{NamespacedName: client.ObjectKey{Name: obj.GetNamespace()}}}
-			}),
-			builder.WithPredicates(ref.Predicates...),
-		)
+	if err := r.WatchDynamicReferences(b, mgr); err != nil {
+		return err
 	}
 
 	return b.Complete(r)

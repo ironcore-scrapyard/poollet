@@ -36,15 +36,17 @@ func VolumeSpecVolumePoolRefNameField(ctx context.Context, fieldIndexer client.F
 	})
 }
 
-func VolumeSpecSecretNamesField(ctx context.Context, fieldIndexer client.FieldIndexer) error {
-	return fieldIndexer.IndexField(ctx, &storagev1alpha1.Volume{}, fields.VolumeSpecSecretNamesField, func(obj client.Object) []string {
-		volume := obj.(*storagev1alpha1.Volume)
+func ExtractVolumeSpecSecretNames(obj client.Object) []string {
+	volume := obj.(*storagev1alpha1.Volume)
 
-		if secretNames := helper.VolumeSpecSecretNames(volume); len(secretNames) > 0 {
-			return secretNames
-		}
-		return []string{""}
-	})
+	if secretNames := helper.VolumeSpecSecretNames(volume); len(secretNames) > 0 {
+		return secretNames
+	}
+	return []string{""}
+}
+
+func VolumeSpecSecretNamesField(ctx context.Context, fieldIndexer client.FieldIndexer) error {
+	return fieldIndexer.IndexField(ctx, &storagev1alpha1.Volume{}, fields.VolumeSpecSecretNamesField, ExtractVolumeSpecSecretNames)
 }
 
 func VolumeStatusSecretNamesField(ctx context.Context, fieldIndexer client.FieldIndexer) error {

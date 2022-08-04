@@ -24,8 +24,8 @@ import (
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
 	"github.com/onmetal/onmetal-api/envtestutils"
 	"github.com/onmetal/onmetal-api/envtestutils/apiserver"
+	storagedependent "github.com/onmetal/poollet/api/storage/dependent"
 	storageindex "github.com/onmetal/poollet/api/storage/index"
-	storagefields "github.com/onmetal/poollet/api/storage/index/fields"
 	"github.com/onmetal/poollet/broker"
 	brokercluster "github.com/onmetal/poollet/broker/cluster"
 	"github.com/onmetal/poollet/broker/controllers/core"
@@ -174,7 +174,7 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 			ClusterName:     clusterName,
 			Domain:          domain,
 		}
-		namespaceReconciler.Dependent(&storagev1alpha1.Volume{})
+		Expect(storagedependent.SetupVolumeToNamespace(namespaceReconciler, poolName)).To(Succeed())
 		Expect(namespaceReconciler.SetupWithManager(k8sManager)).To(Succeed())
 		Expect(prov.Register(&corev1.Namespace{}, namespaceReconciler)).To(Succeed())
 
@@ -187,7 +187,7 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 			ClusterName:  clusterName,
 			Domain:       domain,
 		}
-		secretReconciler.Dependent(&storagev1alpha1.Volume{}, storagefields.VolumeSpecSecretNamesField)
+		Expect(storagedependent.SetupVolumeToSecret(secretReconciler, poolName)).To(Succeed())
 		Expect(secretReconciler.SetupWithManager(k8sManager)).To(Succeed())
 		Expect(prov.Register(&corev1.Secret{}, secretReconciler))
 

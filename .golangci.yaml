@@ -29,6 +29,8 @@ linters-settings:
         alias: ${1}predicate
       - pkg: github.com/onmetal/poollet/api/(\w+)/client
         alias: ${1}client
+      - pkg: github.com/onmetal/poollet/api/(\w+)/dependent
+        alias: ${1}dependent
       - pkg: github.com/onmetal/poollet/api/(\w+)/client/index
         alias: ${1}indexclient
   misspell:

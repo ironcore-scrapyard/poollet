@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	. "sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -87,7 +88,7 @@ var _ = Describe("ConfigMapController", func() {
 		By("deleting the foo referencing the config map")
 		Expect(k8sClient.Delete(ctx, foo)).To(Succeed())
 
-		//By("waiting for the synced config map to be gone")
-		//Eventually(Get(targetConfigMap)).Should(Satisfy(apierrors.IsNotFound))
+		By("waiting for the synced config map to be gone")
+		Eventually(Get(targetConfigMap)).Should(Satisfy(apierrors.IsNotFound))
 	})
 })
