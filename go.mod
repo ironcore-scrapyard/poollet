@@ -19,7 +19,7 @@ require (
 )
 
 require (
-	github.com/onsi/ginkgo/v2 v2.1.6
+	github.com/onsi/ginkgo/v2 v2.2.0
 	github.com/onsi/gomega v1.20.2
 	k8s.io/apiserver v0.24.3
 	k8s.io/klog/v2 v2.80.0
