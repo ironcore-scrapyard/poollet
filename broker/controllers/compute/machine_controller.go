@@ -320,7 +320,11 @@ func (r *MachineReconciler) registerVolumesMutation(ctx context.Context, machine
 			warnings = append(warnings, warning)
 		}
 		if src != nil {
-			targetVolumes = append(targetVolumes, computev1alpha1.Volume{Name: machineVolume.Name, VolumeSource: *src})
+			targetVolumes = append(targetVolumes, computev1alpha1.Volume{
+				Name:         machineVolume.Name,
+				Device:       machineVolume.Device,
+				VolumeSource: *src,
+			})
 		}
 	}
 
