@@ -53,17 +53,17 @@ func (e *EnqueueRequestForBrokerOwner) parseOwnerTypeGroupKind(scheme *runtime.S
 	return nil
 }
 
-func (e *EnqueueRequestForBrokerOwner) getBrokerOwnerReferences(obj client.Object) []brokermeta.BrokerOwnerReference {
+func (e *EnqueueRequestForBrokerOwner) getBrokerOwnerReferences(obj client.Object) []brokermeta.OwnerReference {
 	if obj == nil {
 		return nil
 	}
 
 	if !e.IsController {
-		return brokermeta.GetBrokerOwnerReferences(obj)
+		return brokermeta.GetObjectMeta(obj).OwnerReferences
 	}
 
 	if ownerRef := brokermeta.GetBrokerControllerOf(obj); ownerRef != nil {
-		return []brokermeta.BrokerOwnerReference{*ownerRef}
+		return []brokermeta.OwnerReference{*ownerRef}
 	}
 	return nil
 }

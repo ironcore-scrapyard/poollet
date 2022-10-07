@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -27,9 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const BrokerOwnerReferenceAnnotation = "broker.onmetal.de/owner"
-
-type BrokerOwnerReference struct {
+type OwnerReference struct {
 	ClusterName string    `json:"clusterName"`
 	APIVersion  string    `json:"apiVersion"`
 	Kind        string    `json:"kind"`
@@ -39,13 +38,63 @@ type BrokerOwnerReference struct {
 	Controller  *bool     `json:"controller,omitempty"`
 }
 
+type ObjectMeta struct {
+	OwnerReferences []OwnerReference `json:"ownerReferences,omitempty"`
+}
+
+const (
+	objectMetaAnnotation       = "broker.api.onmetal.de/object-meta"
+	deprecatedBrokerAnnotation = "broker.onmeta.de/owner"
+)
+
+func GetObjectMeta(obj metav1.Object) ObjectMeta {
+	annotations := obj.GetAnnotations()
+	data, ok := annotations[objectMetaAnnotation]
+	if !ok {
+		if data, ok = annotations[deprecatedBrokerAnnotation]; ok {
+			var owners []OwnerReference
+			if err := json.Unmarshal([]byte(data), &owners); err != nil {
+				log.Log.WithName("getObjectMeta").Error(err, "Error decoding object metadata")
+				return ObjectMeta{}
+			}
+			return ObjectMeta{OwnerReferences: owners}
+		}
+		return ObjectMeta{}
+	}
+
+	var meta ObjectMeta
+	if err := json.Unmarshal([]byte(data), &meta); err != nil {
+		log.Log.WithName("getObjectMeta").Error(err, "Error decoding object metadata")
+		return ObjectMeta{}
+	}
+
+	return meta
+}
+
+func SetObjectMeta(obj metav1.Object, meta ObjectMeta) {
+	data, err := json.Marshal(meta)
+	if err != nil {
+		log.Log.WithName("setObjectMeta").Error(err, "Error encoding object metadata")
+		return
+	}
+
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
+	annotations[objectMetaAnnotation] = string(data)
+	delete(annotations, deprecatedBrokerAnnotation)
+	obj.SetAnnotations(annotations)
+}
+
 func SetBrokerControllerReference(clusterName string, brokerOwner, childControlled client.Object, scheme *runtime.Scheme) error {
 	gvk, err := apiutil.GVKForObject(brokerOwner, scheme)
 	if err != nil {
 		return err
 	}
 
-	ref := BrokerOwnerReference{
+	ref := OwnerReference{
 		ClusterName: clusterName,
 		APIVersion:  gvk.GroupVersion().String(),
 		Kind:        gvk.Kind,
@@ -55,7 +104,9 @@ func SetBrokerControllerReference(clusterName string, brokerOwner, childControll
 		Controller:  pointer.Bool(true),
 	}
 
-	if existing := GetBrokerControllerOf(childControlled); existing != nil && !referSameObject(*existing, ref) {
+	childControlledMeta := GetObjectMeta(childControlled)
+
+	if existing := getBrokerControllerOf(&childControlledMeta); existing != nil && !referSameObject(*existing, ref) {
 		return fmt.Errorf("object %s is already broker-controlled by %s %s",
 			client.ObjectKeyFromObject(childControlled),
 			existing.Kind,
@@ -63,7 +114,8 @@ func SetBrokerControllerReference(clusterName string, brokerOwner, childControll
 		)
 	}
 
-	upsertBrokerOwnerRef(ref, childControlled)
+	upsertBrokerOwnerRef(ref, &childControlledMeta)
+	SetObjectMeta(childControlled, childControlledMeta)
 	return nil
 }
 
@@ -72,7 +124,7 @@ func RemoveBrokerOwnerReference(clusterName string, brokerOwner, object client.O
 	if err != nil {
 		return err
 	}
-	ref := BrokerOwnerReference{
+	ref := OwnerReference{
 		ClusterName: clusterName,
 		APIVersion:  gvk.GroupVersion().String(),
 		Kind:        gvk.Kind,
@@ -80,19 +132,20 @@ func RemoveBrokerOwnerReference(clusterName string, brokerOwner, object client.O
 		Name:        brokerOwner.GetName(),
 		UID:         brokerOwner.GetUID(),
 	}
-	removeOwnerRef(ref, object)
+	meta := GetObjectMeta(object)
+	if removeOwnerRef(ref, &meta) {
+		SetObjectMeta(object, meta)
+	}
 	return nil
 }
 
-func removeOwnerRef(ref BrokerOwnerReference, object client.Object) {
-	owners := GetBrokerOwnerReferences(object)
-	if idx := indexBrokerOwnerRef(owners, ref); idx >= 0 {
-		owners[idx] = owners[len(owners)-1]
-		owners = owners[:len(owners)-1]
-	} else {
-		return
+func removeOwnerRef(ref OwnerReference, meta *ObjectMeta) (removed bool) {
+	if idx := indexBrokerOwnerRef(meta.OwnerReferences, ref); idx >= 0 {
+		meta.OwnerReferences[idx] = meta.OwnerReferences[len(meta.OwnerReferences)-1]
+		meta.OwnerReferences = meta.OwnerReferences[:len(meta.OwnerReferences)-1]
+		return true
 	}
-	SetBrokerOwnerReferences(object, owners)
+	return false
 }
 
 func SetBrokerOwnerReference(clusterName string, brokerOwner, object client.Object, scheme *runtime.Scheme) error {
@@ -100,7 +153,7 @@ func SetBrokerOwnerReference(clusterName string, brokerOwner, object client.Obje
 	if err != nil {
 		return err
 	}
-	ref := BrokerOwnerReference{
+	ref := OwnerReference{
 		ClusterName: clusterName,
 		APIVersion:  gvk.GroupVersion().String(),
 		Kind:        gvk.Kind,
@@ -108,7 +161,9 @@ func SetBrokerOwnerReference(clusterName string, brokerOwner, object client.Obje
 		Name:        brokerOwner.GetName(),
 		UID:         brokerOwner.GetUID(),
 	}
-	upsertBrokerOwnerRef(ref, object)
+	meta := GetObjectMeta(object)
+	upsertBrokerOwnerRef(ref, &meta)
+	SetObjectMeta(object, meta)
 	return nil
 }
 
@@ -117,7 +172,8 @@ func HasBrokerOwnerReference(clusterName string, brokerOwner, object client.Obje
 	if err != nil {
 		return false, err
 	}
-	ref := BrokerOwnerReference{
+
+	ref := OwnerReference{
 		ClusterName: clusterName,
 		APIVersion:  gvk.GroupVersion().String(),
 		Kind:        gvk.Kind,
@@ -125,21 +181,22 @@ func HasBrokerOwnerReference(clusterName string, brokerOwner, object client.Obje
 		Name:        brokerOwner.GetName(),
 		UID:         brokerOwner.GetUID(),
 	}
-	return indexBrokerOwnerRef(GetBrokerOwnerReferences(object), ref) != -1, nil
+
+	meta := GetObjectMeta(object)
+
+	return indexBrokerOwnerRef(meta.OwnerReferences, ref) != -1, nil
 }
 
-func upsertBrokerOwnerRef(ref BrokerOwnerReference, object client.Object) {
-	owners := GetBrokerOwnerReferences(object)
-	if idx := indexBrokerOwnerRef(owners, ref); idx == -1 {
-		owners = append(owners, ref)
+func upsertBrokerOwnerRef(ref OwnerReference, meta *ObjectMeta) {
+	if idx := indexBrokerOwnerRef(meta.OwnerReferences, ref); idx == -1 {
+		meta.OwnerReferences = append(meta.OwnerReferences, ref)
 	} else {
-		owners[idx] = ref
+		meta.OwnerReferences[idx] = ref
 	}
-	SetBrokerOwnerReferences(object, owners)
 }
 
 // indexBrokerOwnerRef returns the index of the broker owner reference in the slice if found, or -1.
-func indexBrokerOwnerRef(ownerReferences []BrokerOwnerReference, ref BrokerOwnerReference) int {
+func indexBrokerOwnerRef(ownerReferences []OwnerReference, ref OwnerReference) int {
 	for index, r := range ownerReferences {
 		if referSameObject(r, ref) {
 			return index
@@ -149,7 +206,12 @@ func indexBrokerOwnerRef(ownerReferences []BrokerOwnerReference, ref BrokerOwner
 }
 
 func IsBrokerControlledBy(clusterName string, brokerOwner, childControlled client.Object) bool {
-	existing := GetBrokerControllerOf(childControlled)
+	childControlledMeta := GetObjectMeta(childControlled)
+	return isBrokerControlledBy(clusterName, brokerOwner, &childControlledMeta)
+}
+
+func isBrokerControlledBy(clusterName string, brokerOwner client.Object, childControlledMeta *ObjectMeta) bool {
+	existing := getBrokerControllerOf(childControlledMeta)
 	if existing == nil {
 		return false
 	}
@@ -157,7 +219,7 @@ func IsBrokerControlledBy(clusterName string, brokerOwner, childControlled clien
 	return existing.ClusterName == clusterName && existing.UID == brokerOwner.GetUID()
 }
 
-func referSameObject(a, b BrokerOwnerReference) bool {
+func referSameObject(a, b OwnerReference) bool {
 	aGV, err := schema.ParseGroupVersion(a.APIVersion)
 	if err != nil {
 		return false
@@ -175,37 +237,7 @@ func referSameObject(a, b BrokerOwnerReference) bool {
 		a.Name == b.Name
 }
 
-func SetBrokerOwnerReferences(obj client.Object, refs []BrokerOwnerReference) {
-	data, err := json.Marshal(refs)
-	if err != nil {
-		log.Log.WithName("SetBrokerOwnerReferences").Error(err, "Error encoding broker owner references")
-		return
-	}
-
-	annotations := obj.GetAnnotations()
-	if annotations == nil {
-		annotations = make(map[string]string)
-	}
-	annotations[BrokerOwnerReferenceAnnotation] = string(data)
-	obj.SetAnnotations(annotations)
-}
-
-func GetBrokerOwnerReferences(obj client.Object) []BrokerOwnerReference {
-	refsData, ok := obj.GetAnnotations()[BrokerOwnerReferenceAnnotation]
-	if !ok {
-		return nil
-	}
-
-	var refs []BrokerOwnerReference
-	if err := json.Unmarshal([]byte(refsData), &refs); err != nil {
-		log.Log.WithName("GetBrokerOwnerReferences").Error(err, "Error decoding broker owner references")
-		return nil
-	}
-
-	return refs
-}
-
-func RefersToClusterAndType(clusterName string, ownerType client.Object, ref BrokerOwnerReference, scheme *runtime.Scheme) (bool, error) {
+func RefersToClusterAndType(clusterName string, ownerType client.Object, ref OwnerReference, scheme *runtime.Scheme) (bool, error) {
 	if ref.ClusterName != clusterName {
 		return false, nil
 	}
@@ -226,17 +258,21 @@ func RefersToClusterAndType(clusterName string, ownerType client.Object, ref Bro
 	return expectedOwnerGK == actualOwnerGK, nil
 }
 
-func GetBrokerControllerOf(childControllee client.Object) *BrokerOwnerReference {
-	refs := GetBrokerOwnerReferences(childControllee)
-	if refs == nil {
+func getBrokerControllerOf(meta *ObjectMeta) *OwnerReference {
+	if meta.OwnerReferences == nil {
 		return nil
 	}
 
-	for _, ref := range refs {
+	for _, ref := range meta.OwnerReferences {
 		if controller := ref.Controller; controller != nil && *controller {
 			ref := ref
 			return &ref
 		}
 	}
 	return nil
+}
+
+func GetBrokerControllerOf(childControllee client.Object) *OwnerReference {
+	refs := GetObjectMeta(childControllee)
+	return getBrokerControllerOf(&refs)
 }
