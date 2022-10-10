@@ -22,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -30,6 +31,17 @@ import (
 var (
 	ErrAncestorMismatch = errors.New("ancestor mismatch")
 )
+
+// GetRootUID gets the 'root' uid of an object. The root uid is
+// * the object's own UID in case it has no ancestors (via mcmeta.GetAncestors)
+// * the first ancestor's UID
+func GetRootUID(obj metav1.Object) types.UID {
+	ancestors := mcmeta.GetAncestors(obj)
+	if len(ancestors) == 0 {
+		return obj.GetUID()
+	}
+	return ancestors[0].UID
+}
 
 func SetAncestry(clusterName string, parent, child metav1.Object) error {
 	selfAncestor := mcmeta.Ancestor{

@@ -94,4 +94,18 @@ var _ = Describe("Meta", func() {
 			Expect(SetAncestry(sourceCluster, sourceObj, grandchildObj)).To(HaveOccurred())
 		})
 	})
+
+	Describe("GetRootUID", func() {
+		It("should return the own uid", func() {
+			Expect(GetRootUID(sourceObj)).To(Equal(sourceObj.GetUID()))
+		})
+
+		It("should return the first ancestor's uid", func() {
+			Expect(SetAncestry(sourceCluster, sourceObj, childObj)).To(Succeed())
+			Expect(SetAncestry(childCluster, childObj, grandchildObj)).To(Succeed())
+
+			Expect(GetRootUID(childObj)).To(Equal(sourceObj.GetUID()))
+			Expect(GetRootUID(grandchildObj)).To(Equal(sourceObj.GetUID()))
+		})
+	})
 })
