@@ -218,7 +218,12 @@ func (r *VirtualIPReconciler) applyTarget(ctx context.Context, log logr.Logger, 
 	}
 
 	log.V(1).Info("Applying target")
-	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, virtualIP, target,
+	if _, err := brokerclient.BrokerControlledCreateOrPatch(
+		ctx,
+		r.TargetClient,
+		r.ClusterName,
+		virtualIP,
+		target,
 		b.Mutate(target),
 	); err != nil {
 		return nil, b.PartialSync, sync.IgnorePartialCreate(err)

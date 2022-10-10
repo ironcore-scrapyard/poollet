@@ -17,7 +17,7 @@ package storage_test
 import (
 	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
 	. "github.com/onmetal/onmetal-api/testutils"
-	brokermeta "github.com/onmetal/poollet/broker/meta"
+	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
@@ -87,6 +87,6 @@ var _ = Describe("VolumeController", func() {
 
 func BeBrokerControlled(clusterName string, brokerOwner client.Object) types.GomegaMatcher {
 	return Satisfy(func(obj client.Object) bool {
-		return brokermeta.IsBrokerControlledBy(clusterName, brokerOwner, obj)
+		return mcmeta.IsControlledBy(clusterName, brokerOwner, obj)
 	})
 }

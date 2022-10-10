@@ -17,7 +17,7 @@ package core_test
 import (
 	. "github.com/onmetal/onmetal-api/testutils"
 	"github.com/onmetal/poollet/broker/errors"
-	brokermeta "github.com/onmetal/poollet/broker/meta"
+	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	testdatav1 "github.com/onmetal/poollet/testdata/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -61,7 +61,11 @@ var _ = Describe("NamespaceController", func() {
 
 		By("inspecting the namespace")
 		Expect(targetNS.GenerateName).To(Equal(ns.Name + "-"))
-		Expect(brokermeta.IsBrokerControlledBy(clusterName, ns, targetNS)).To(BeTrue(), "target is not broker-controlled")
+		Expect(mcmeta.IsControlledBy(
+			clusterName,
+			ns,
+			targetNS,
+		)).To(BeTrue(), "target is not broker-controlled")
 
 		By("deleting the foo")
 		Expect(k8sClient.Delete(ctx, foo)).To(Succeed())

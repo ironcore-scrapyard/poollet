@@ -16,7 +16,7 @@ package core_test
 
 import (
 	. "github.com/onmetal/onmetal-api/testutils"
-	brokermeta "github.com/onmetal/poollet/broker/meta"
+	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	testdatav1 "github.com/onmetal/poollet/testdata/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -74,7 +74,11 @@ var _ = Describe("ConfigMapController", func() {
 
 		By("inspecting the synced config map")
 		Expect(targetConfigMap.Namespace).NotTo(Equal(configMap.Namespace))
-		Expect(brokermeta.IsBrokerControlledBy(clusterName, configMap, targetConfigMap)).To(BeTrue(), "config map is not broker-controlled")
+		Expect(mcmeta.IsControlledBy(
+			clusterName,
+			configMap,
+			targetConfigMap,
+		)).To(BeTrue(), "config map is not broker-controlled")
 		Expect(targetConfigMap.Data).To(Equal(configMap.Data))
 
 		By("updating the original config map")

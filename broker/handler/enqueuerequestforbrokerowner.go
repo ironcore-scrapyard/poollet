@@ -15,7 +15,7 @@
 package handler
 
 import (
-	brokermeta "github.com/onmetal/poollet/broker/meta"
+	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -53,17 +53,17 @@ func (e *EnqueueRequestForBrokerOwner) parseOwnerTypeGroupKind(scheme *runtime.S
 	return nil
 }
 
-func (e *EnqueueRequestForBrokerOwner) getBrokerOwnerReferences(obj client.Object) []brokermeta.OwnerReference {
+func (e *EnqueueRequestForBrokerOwner) getBrokerOwnerReferences(obj client.Object) []mcmeta.OwnerReference {
 	if obj == nil {
 		return nil
 	}
 
 	if !e.IsController {
-		return brokermeta.GetObjectMeta(obj).OwnerReferences
+		return mcmeta.GetOwnerReferences(obj)
 	}
 
-	if ownerRef := brokermeta.GetBrokerControllerOf(obj); ownerRef != nil {
-		return []brokermeta.OwnerReference{*ownerRef}
+	if ownerRef := mcmeta.GetControllerOf(obj); ownerRef != nil {
+		return []mcmeta.OwnerReference{*ownerRef}
 	}
 	return nil
 }

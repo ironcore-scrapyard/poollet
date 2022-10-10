@@ -145,10 +145,17 @@ func (r *SecretReconciler) reconcile(ctx context.Context, log logr.Logger, secre
 		},
 	}
 	log.V(1).Info("Applying target")
-	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, secret, targetSecret, func() error {
-		targetSecret.Data = secret.Data
-		return nil
-	}); err != nil {
+	if _, err := brokerclient.BrokerControlledCreateOrPatch(
+		ctx,
+		r.TargetClient,
+		r.ClusterName,
+		secret,
+		targetSecret,
+		func() error {
+			targetSecret.Data = secret.Data
+			return nil
+		},
+	); err != nil {
 		return ctrl.Result{}, fmt.Errorf("error applying target: %w", err)
 	}
 

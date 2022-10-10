@@ -290,7 +290,12 @@ func (r *NetworkInterfaceReconciler) applyTarget(ctx context.Context, log logr.L
 	}
 
 	log.V(1).Info("Applying target")
-	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, nic, target,
+	if _, err := brokerclient.BrokerControlledCreateOrPatch(
+		ctx,
+		r.TargetClient,
+		r.ClusterName,
+		nic,
+		target,
 		b.Mutate(target),
 	); err != nil {
 		return nil, b.PartialSync, sync.IgnorePartialCreate(err)

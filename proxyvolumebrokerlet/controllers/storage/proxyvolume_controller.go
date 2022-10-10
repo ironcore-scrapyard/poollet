@@ -27,8 +27,8 @@ import (
 	"github.com/onmetal/poollet/broker/controllers/storage"
 	"github.com/onmetal/poollet/broker/domain"
 	brokerhandler "github.com/onmetal/poollet/broker/handler"
-	brokermeta "github.com/onmetal/poollet/broker/meta"
 	"github.com/onmetal/poollet/broker/provider"
+	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	proxyvolumebrokerletcontrollerscommon "github.com/onmetal/poollet/proxyvolumebrokerlet/controllers/common"
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -109,7 +109,7 @@ func (r *ProxyVolumeReconciler) delete(ctx context.Context, log logr.Logger, vol
 }
 
 func (r *ProxyVolumeReconciler) applierFor(volume *storagev1alpha1.Volume) storage.VolumeApplier {
-	brokerCtrl := brokermeta.GetBrokerControllerOf(volume)
+	brokerCtrl := mcmeta.GetControllerOf(volume)
 	if brokerCtrl == nil {
 		return &storage.SyncVolumeApplier{
 			Provider:         r.Provider,

@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	brokermeta "github.com/onmetal/poollet/broker/meta"
+	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -75,7 +75,7 @@ func (p *FilterNoTargetNamespacePredicate) filter(obj client.Object) bool {
 		return false
 	}
 
-	brokerCtrl := brokermeta.GetBrokerControllerOf(ns)
+	brokerCtrl := mcmeta.GetControllerOf(ns)
 	return brokerCtrl == nil ||
 		brokerCtrl.ClusterName != p.ClusterName ||
 		brokerCtrl.Kind != "Namespace"

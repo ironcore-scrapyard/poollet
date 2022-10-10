@@ -26,8 +26,8 @@ import (
 	brokercontrollerscommon "github.com/onmetal/poollet/broker/controllers/common"
 	"github.com/onmetal/poollet/broker/controllers/core"
 	"github.com/onmetal/poollet/broker/dependents/builder"
-	brokermeta "github.com/onmetal/poollet/broker/meta"
 	"github.com/onmetal/poollet/broker/provider"
+	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	testdatav1 "github.com/onmetal/poollet/testdata/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -241,7 +241,7 @@ func SetupTest(ctx context.Context) (*corev1.Namespace, provider.Provider) {
 		namespaceList := &corev1.NamespaceList{}
 		Expect(k8sClient.List(ctx, namespaceList)).To(Succeed())
 		for _, namespace := range namespaceList.Items {
-			brokerCtrl := brokermeta.GetBrokerControllerOf(&namespace)
+			brokerCtrl := mcmeta.GetControllerOf(&namespace)
 			if brokerCtrl == nil {
 				continue
 			}

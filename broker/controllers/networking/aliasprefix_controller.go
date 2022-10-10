@@ -30,9 +30,10 @@ import (
 	"github.com/onmetal/poollet/broker/controllers/networking/events"
 	"github.com/onmetal/poollet/broker/domain"
 	brokererrors "github.com/onmetal/poollet/broker/errors"
-	brokermeta "github.com/onmetal/poollet/broker/meta"
 	"github.com/onmetal/poollet/broker/provider"
 	"github.com/onmetal/poollet/broker/sync"
+	controllerutil2 "github.com/onmetal/poollet/multicluster/controllerutil"
+	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -226,7 +227,12 @@ func (r *AliasPrefixReconciler) applyTarget(ctx context.Context, log logr.Logger
 	}
 
 	log.V(1).Info("Applying target")
-	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, aliasPrefix, target,
+	if _, err := brokerclient.BrokerControlledCreateOrPatch(
+		ctx,
+		r.TargetClient,
+		r.ClusterName,
+		aliasPrefix,
+		target,
 		b.Mutate(target),
 	); err != nil {
 		return nil, b.PartialSync, sync.IgnorePartialCreate(err)
@@ -311,7 +317,12 @@ func (r *AliasPrefixReconciler) applyTargetRouting(ctx context.Context, log logr
 		return err
 	}
 
-	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, aliasPrefix, targetAliasPrefixRouting,
+	if _, err := brokerclient.BrokerControlledCreateOrPatch(
+		ctx,
+		r.TargetClient,
+		r.ClusterName,
+		aliasPrefix,
+		targetAliasPrefixRouting,
 		b.Mutate(targetAliasPrefixRouting),
 	); err != nil {
 		return sync.IgnorePartialCreate(err)
@@ -366,12 +377,12 @@ func (r *AliasPrefixReconciler) SetupWithManager(mgr broker.Manager) error {
 					return nil
 				}
 
-				brokerCtrl := brokermeta.GetBrokerControllerOf(aliasPrefix)
+				brokerCtrl := mcmeta.GetControllerOf(aliasPrefix)
 				if brokerCtrl == nil {
 					return nil
 				}
 
-				ok, err := brokermeta.RefersToClusterAndType(r.ClusterName, &networkingv1alpha1.AliasPrefix{}, *brokerCtrl, r.Scheme)
+				ok, err := controllerutil2.RefersToClusterAndType(r.ClusterName, &networkingv1alpha1.AliasPrefix{}, *brokerCtrl, r.Scheme)
 				if err != nil {
 					log.Error(err, "Error determining whether broker networkingctrl refers to alias prefix")
 					return nil

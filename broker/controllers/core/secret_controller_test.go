@@ -16,7 +16,7 @@ package core_test
 
 import (
 	. "github.com/onmetal/onmetal-api/testutils"
-	brokermeta "github.com/onmetal/poollet/broker/meta"
+	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	testdatav1 "github.com/onmetal/poollet/testdata/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -74,7 +74,11 @@ var _ = Describe("SecretController", func() {
 
 		By("inspecting the synced secret")
 		Expect(targetSecret.Namespace).NotTo(Equal(secret.Namespace))
-		Expect(brokermeta.IsBrokerControlledBy(clusterName, secret, targetSecret)).To(BeTrue(), "secret is not broker-controlled")
+		Expect(mcmeta.IsControlledBy(
+			clusterName,
+			secret,
+			targetSecret,
+		)).To(BeTrue(), "secret is not broker-controlled")
 		Expect(targetSecret.Data).To(Equal(secret.Data))
 
 		By("updating the original secret")

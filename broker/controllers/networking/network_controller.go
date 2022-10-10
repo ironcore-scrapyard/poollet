@@ -148,7 +148,12 @@ func (r *NetworkReconciler) reconcile(ctx context.Context, log logr.Logger, netw
 	}
 
 	log.V(1).Info("Applying target")
-	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, network, target,
+	if _, err := brokerclient.BrokerControlledCreateOrPatch(
+		ctx,
+		r.TargetClient,
+		r.ClusterName,
+		network,
+		target,
 		func() error {
 			return nil
 		},

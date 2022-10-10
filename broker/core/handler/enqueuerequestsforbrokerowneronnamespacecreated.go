@@ -19,8 +19,8 @@ import (
 
 	"github.com/onmetal/controller-utils/metautils"
 	brokercluster "github.com/onmetal/poollet/broker/cluster"
-	brokermeta "github.com/onmetal/poollet/broker/meta"
 	poollethandler "github.com/onmetal/poollet/handler"
+	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -72,7 +72,7 @@ func (e *EnqueueRequestForBrokerOwnerOnNamespaceCreated) handle(object client.Ob
 	ctx := context.TODO()
 	ns := object.(*corev1.Namespace)
 
-	brokerCtrl := brokermeta.GetBrokerControllerOf(ns)
+	brokerCtrl := mcmeta.GetControllerOf(ns)
 	if brokerCtrl == nil ||
 		brokerCtrl.ClusterName != e.ClusterName ||
 		brokerCtrl.Kind != "Namespace" {

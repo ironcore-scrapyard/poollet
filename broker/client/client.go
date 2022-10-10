@@ -18,28 +18,51 @@ import (
 	"context"
 	"fmt"
 
-	brokermeta "github.com/onmetal/poollet/broker/meta"
 	poolletclient "github.com/onmetal/poollet/client"
+	mccontrolerutil "github.com/onmetal/poollet/multicluster/controllerutil"
+	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-func BrokerControlledListSingle(ctx context.Context, r client.Reader, scheme *runtime.Scheme, clusterName string, brokerOwner, obj client.Object, opts ...client.ListOption) error {
+func BrokerControlledListSingle(
+	ctx context.Context,
+	r client.Reader,
+	scheme *runtime.Scheme,
+	clusterName string,
+	brokerOwner, obj client.Object,
+	opts ...client.ListOption,
+) error {
 	if err := poolletclient.ListSingle(ctx, r, scheme, obj, opts...); err != nil {
 		return err
 	}
-	if !brokermeta.IsBrokerControlledBy(clusterName, brokerOwner, obj) {
+	if !mcmeta.IsControlledBy(clusterName, brokerOwner, obj) {
 		return fmt.Errorf("object is not broker-controlled by broker owner")
 	}
 	return nil
 }
 
-func BrokerControlledListSingleAndDelete(ctx context.Context, r client.Reader, c client.Client, clusterName string, brokerOwner, obj client.Object, opts ...client.DeleteAllOfOption) error {
+func BrokerControlledListSingleAndDelete(
+	ctx context.Context,
+	r client.Reader,
+	c client.Client,
+	clusterName string,
+	brokerOwner, obj client.Object,
+	opts ...client.DeleteAllOfOption,
+) error {
 	deleteAllOfOptions := &client.DeleteAllOfOptions{}
 	deleteAllOfOptions.ApplyOptions(opts)
 
-	if err := BrokerControlledListSingle(ctx, r, c.Scheme(), clusterName, brokerOwner, obj, &deleteAllOfOptions.ListOptions); err != nil {
+	if err := BrokerControlledListSingle(
+		ctx,
+		r,
+		c.Scheme(),
+		clusterName,
+		brokerOwner,
+		obj,
+		&deleteAllOfOptions.ListOptions,
+	); err != nil {
 		return err
 	}
 
@@ -48,7 +71,7 @@ func BrokerControlledListSingleAndDelete(ctx context.Context, r client.Reader, c
 
 func brokerControlledMutate(clusterName string, brokerOwner, obj client.Object, f controllerutil.MutateFn, scheme *runtime.Scheme) error {
 	if obj.GetResourceVersion() != "" {
-		if !brokermeta.IsBrokerControlledBy(clusterName, brokerOwner, obj) {
+		if !mcmeta.IsControlledBy(clusterName, brokerOwner, obj) {
 			return fmt.Errorf("object is not broker-controlled by broker owner")
 		}
 		return f()
@@ -56,16 +79,33 @@ func brokerControlledMutate(clusterName string, brokerOwner, obj client.Object, 
 	if err := f(); err != nil {
 		return err
 	}
-	return brokermeta.SetBrokerControllerReference(clusterName, brokerOwner, obj, scheme)
+	if err := mccontrolerutil.SetAncestry(clusterName, brokerOwner, obj); err != nil {
+		return err
+	}
+	return mccontrolerutil.SetControllerReference(clusterName, brokerOwner, obj, scheme)
 }
 
-func BrokerControlledCreateOrPatch(ctx context.Context, c client.Client, clusterName string, parentOwner client.Object, obj client.Object, f controllerutil.MutateFn) (controllerutil.OperationResult, error) {
+func BrokerControlledCreateOrPatch(
+	ctx context.Context,
+	c client.Client,
+	clusterName string,
+	parentOwner, obj client.Object,
+	f controllerutil.MutateFn,
+) (controllerutil.OperationResult, error) {
 	return controllerutil.CreateOrPatch(ctx, c, obj, func() error {
 		return brokerControlledMutate(clusterName, parentOwner, obj, f, c.Scheme())
 	})
 }
 
-func BrokerControlledListSingleGenerateOrPatch(ctx context.Context, r client.Reader, c client.Client, clusterName string, parentOwner, obj client.Object, f controllerutil.MutateFn, opts ...client.ListOption) (controllerutil.OperationResult, error) {
+func BrokerControlledListSingleGenerateOrPatch(
+	ctx context.Context,
+	r client.Reader,
+	c client.Client,
+	clusterName string,
+	parentOwner, obj client.Object,
+	f controllerutil.MutateFn,
+	opts ...client.ListOption,
+) (controllerutil.OperationResult, error) {
 	return poolletclient.ListSingleGenerateOrPatch(ctx, r, c, obj, func() error {
 		return brokerControlledMutate(clusterName, parentOwner, obj, f, c.Scheme())
 	}, opts...)

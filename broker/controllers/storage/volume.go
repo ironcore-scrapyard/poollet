@@ -27,10 +27,11 @@ import (
 	brokerclient "github.com/onmetal/poollet/broker/client"
 	"github.com/onmetal/poollet/broker/domain"
 	brokererrors "github.com/onmetal/poollet/broker/errors"
-	brokermeta "github.com/onmetal/poollet/broker/meta"
 	"github.com/onmetal/poollet/broker/provider"
 	"github.com/onmetal/poollet/broker/sync"
 	poolletclient "github.com/onmetal/poollet/client"
+	"github.com/onmetal/poollet/multicluster/controllerutil"
+	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -54,7 +55,7 @@ type ProxyVolumeApplier struct {
 var errNoBrokerController = fmt.Errorf("volume does not have broker controller set")
 
 func (r *ProxyVolumeApplier) ApplyTarget(ctx context.Context, volume *storagev1alpha1.Volume) (*storagev1alpha1.Volume, bool, error) {
-	brokerCtrl := brokermeta.GetBrokerControllerOf(volume)
+	brokerCtrl := mcmeta.GetControllerOf(volume)
 	if brokerCtrl == nil {
 		return nil, false, errNoBrokerController
 	}
@@ -70,7 +71,12 @@ func (r *ProxyVolumeApplier) ApplyTarget(ctx context.Context, volume *storagev1a
 	}
 
 	baseTarget := target.DeepCopy()
-	if err := brokermeta.SetBrokerOwnerReference(r.ClusterName, volume, target, r.Scheme); err != nil {
+	if err := controllerutil.SetOwnerReference(
+		r.ClusterName,
+		volume,
+		target,
+		r.Scheme,
+	); err != nil {
 		return nil, false, fmt.Errorf("error setting target %s broker owner reference: %w", targetKey, err)
 	}
 	if err := r.TargetClient.Patch(ctx, target, client.MergeFrom(baseTarget)); err != nil {
@@ -81,7 +87,7 @@ func (r *ProxyVolumeApplier) ApplyTarget(ctx context.Context, volume *storagev1a
 }
 
 func (r *ProxyVolumeApplier) GetTarget(ctx context.Context, volume *storagev1alpha1.Volume) (*storagev1alpha1.Volume, error) {
-	brokerCtrl := brokermeta.GetBrokerControllerOf(volume)
+	brokerCtrl := mcmeta.GetControllerOf(volume)
 	if brokerCtrl == nil {
 		return nil, errNoBrokerController
 	}
@@ -96,7 +102,12 @@ func (r *ProxyVolumeApplier) GetTarget(ctx context.Context, volume *storagev1alp
 		return nil, err
 	}
 
-	ok, err := brokermeta.HasBrokerOwnerReference(r.ClusterName, volume, target, r.Scheme)
+	ok, err := controllerutil.HasOwnerReference(
+		r.ClusterName,
+		volume,
+		target,
+		r.Scheme,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +118,7 @@ func (r *ProxyVolumeApplier) GetTarget(ctx context.Context, volume *storagev1alp
 }
 
 func (r *ProxyVolumeApplier) DeleteTarget(ctx context.Context, volume *storagev1alpha1.Volume) (done bool, err error) {
-	brokerCtrl := brokermeta.GetBrokerControllerOf(volume)
+	brokerCtrl := mcmeta.GetControllerOf(volume)
 	if brokerCtrl == nil {
 		return false, errNoBrokerController
 	}
@@ -125,7 +136,12 @@ func (r *ProxyVolumeApplier) DeleteTarget(ctx context.Context, volume *storagev1
 	}
 
 	baseTarget := target.DeepCopy()
-	if err := brokermeta.RemoveBrokerOwnerReference(r.ClusterName, volume, target, r.Scheme); err != nil {
+	if err := controllerutil.RemoveOwnerReference(
+		r.ClusterName,
+		volume,
+		target,
+		r.Scheme,
+	); err != nil {
 		return false, fmt.Errorf("error removing target %s owner reference: %w", targetKey, err)
 	}
 	if err := r.TargetClient.Patch(ctx, target, client.MergeFrom(baseTarget)); err != nil {
@@ -249,7 +265,12 @@ func (r *SyncVolumeApplier) ApplyTarget(ctx context.Context, volume *storagev1al
 		return nil, false, err
 	}
 
-	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, volume, target,
+	if _, err := brokerclient.BrokerControlledCreateOrPatch(
+		ctx,
+		r.TargetClient,
+		r.ClusterName,
+		volume,
+		target,
 		b.Mutate(target),
 	); err != nil {
 		return nil, b.PartialSync, sync.IgnorePartialCreate(err)

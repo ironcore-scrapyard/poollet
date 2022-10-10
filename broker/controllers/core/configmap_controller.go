@@ -146,10 +146,17 @@ func (r *ConfigMapReconciler) reconcile(ctx context.Context, log logr.Logger, co
 		Data: configMap.Data,
 	}
 	log.V(1).Info("Applying target")
-	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, configMap, targetConfigMap, func() error {
-		targetConfigMap.Data = configMap.Data
-		return nil
-	}); err != nil {
+	if _, err := brokerclient.BrokerControlledCreateOrPatch(
+		ctx,
+		r.TargetClient,
+		r.ClusterName,
+		configMap,
+		targetConfigMap,
+		func() error {
+			targetConfigMap.Data = configMap.Data
+			return nil
+		},
+	); err != nil {
 		return ctrl.Result{}, fmt.Errorf("error applying target: %w", err)
 	}
 

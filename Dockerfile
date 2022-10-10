@@ -26,6 +26,7 @@ COPY handler/ handler/
 COPY hash/ hash/
 COPY index/ index/
 COPY machinebrokerlet/ machinebrokerlet/
+COPY multicluster/ multicluster/
 COPY partitionlet/ partitionlet/
 COPY predicate/ predicate/
 COPY proxyvolumebrokerlet/ proxyvolumebrokerlet/

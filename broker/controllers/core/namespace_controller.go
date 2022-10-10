@@ -27,7 +27,8 @@ import (
 	"github.com/onmetal/poollet/broker/dependents"
 	"github.com/onmetal/poollet/broker/domain"
 	brokererrors "github.com/onmetal/poollet/broker/errors"
-	brokermeta "github.com/onmetal/poollet/broker/meta"
+	mccontrolerutil "github.com/onmetal/poollet/multicluster/controllerutil"
+	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -94,7 +95,13 @@ func (r *NamespaceReconciler) delete(ctx context.Context, log logr.Logger, ns *c
 
 	log.V(1).Info("Delete")
 
-	if err := brokerclient.BrokerControlledListSingleAndDelete(ctx, r.TargetAPIReader, r.TargetClient, r.ClusterName, ns, &corev1.Namespace{},
+	if err := brokerclient.BrokerControlledListSingleAndDelete(
+		ctx,
+		r.TargetAPIReader,
+		r.TargetClient,
+		r.ClusterName,
+		ns,
+		&corev1.Namespace{},
 		client.MatchingLabels{r.targetSourceUIDLabel(): string(ns.UID)},
 	); err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -115,7 +122,7 @@ func (r *NamespaceReconciler) delete(ctx context.Context, log logr.Logger, ns *c
 // Otherwise, the name of the source namespace will be used as GenerateName for the target namespace.
 func (r *NamespaceReconciler) getTargetNamespaceGenerateName(ns *corev1.Namespace) string {
 	var name string
-	if brokerCtrl := brokermeta.GetBrokerControllerOf(ns); brokerCtrl != nil &&
+	if brokerCtrl := mcmeta.GetControllerOf(ns); brokerCtrl != nil &&
 		brokerCtrl.APIVersion == corev1.SchemeGroupVersion.String() &&
 		brokerCtrl.Kind == "Namespace" {
 		name = brokerCtrl.Name
@@ -131,7 +138,13 @@ func (r *NamespaceReconciler) reconcile(ctx context.Context, log logr.Logger, ns
 
 	log.V(1).Info("Getting target namespace if exists")
 	targetNS := &corev1.Namespace{}
-	if err := brokerclient.BrokerControlledListSingle(ctx, r.TargetAPIReader, r.Scheme, r.ClusterName, ns, targetNS,
+	if err := brokerclient.BrokerControlledListSingle(
+		ctx,
+		r.TargetAPIReader,
+		r.Scheme,
+		r.ClusterName,
+		ns,
+		targetNS,
 		client.MatchingLabels{r.targetSourceUIDLabel(): string(ns.UID)},
 	); err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -160,7 +173,12 @@ func (r *NamespaceReconciler) reconcile(ctx context.Context, log logr.Logger, ns
 		log.V(1).Info("Creating target namespace")
 		targetNS = &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{GenerateName: r.getTargetNamespaceGenerateName(ns)}}
 		metautils.SetLabel(targetNS, r.targetSourceUIDLabel(), string(ns.UID))
-		if err := brokermeta.SetBrokerControllerReference(r.ClusterName, ns, targetNS, r.Scheme); err != nil {
+		if err := mccontrolerutil.SetControllerReference(
+			r.ClusterName,
+			ns,
+			targetNS,
+			r.Scheme,
+		); err != nil {
 			return ctrl.Result{}, fmt.Errorf("error setting broker controller reference: %w", err)
 		}
 		if err := r.TargetClient.Create(ctx, targetNS); err != nil {
@@ -187,7 +205,13 @@ func (r *NamespaceReconciler) Target(ctx context.Context, key client.ObjectKey, 
 		return err
 	}
 
-	if err := brokerclient.BrokerControlledListSingle(ctx, r.TargetAPIReader, r.Scheme, r.ClusterName, ns, targetNS,
+	if err := brokerclient.BrokerControlledListSingle(
+		ctx,
+		r.TargetAPIReader,
+		r.Scheme,
+		r.ClusterName,
+		ns,
+		targetNS,
 		client.MatchingLabels{r.targetSourceUIDLabel(): string(ns.UID)},
 	); err != nil {
 		if !apierrors.IsNotFound(err) {

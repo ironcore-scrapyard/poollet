@@ -474,7 +474,12 @@ func (r *MachineReconciler) applyTarget(ctx context.Context, machine *computev1a
 		return nil, false, err
 	}
 
-	if _, err := brokerclient.BrokerControlledCreateOrPatch(ctx, r.TargetClient, r.ClusterName, machine, target,
+	if _, err := brokerclient.BrokerControlledCreateOrPatch(
+		ctx,
+		r.TargetClient,
+		r.ClusterName,
+		machine,
+		target,
 		b.Mutate(target),
 	); err != nil {
 		return nil, b.PartialSync, sync.IgnorePartialCreate(err)
