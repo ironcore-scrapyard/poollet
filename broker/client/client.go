@@ -79,9 +79,6 @@ func brokerControlledMutate(clusterName string, brokerOwner, obj client.Object, 
 	if err := f(); err != nil {
 		return err
 	}
-	if err := mccontrolerutil.SetAncestry(clusterName, brokerOwner, obj); err != nil {
-		return err
-	}
 	return mccontrolerutil.SetControllerReference(clusterName, brokerOwner, obj, scheme)
 }
 

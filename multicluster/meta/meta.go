@@ -32,23 +32,6 @@ type OwnerReference struct {
 	Controller  *bool     `json:"controller,omitempty"`
 }
 
-type Ancestor struct {
-	ClusterName string    `json:"clusterName"`
-	Namespace   string    `json:"namespace,omitempty"`
-	Name        string    `json:"name"`
-	UID         types.UID `json:"uid"`
-}
-
-func GetAncestors(obj metav1.Object) []Ancestor {
-	return getObjectMeta(obj).Ancestors
-}
-
-func SetAncestors(obj metav1.Object, ancestors []Ancestor) {
-	meta := getObjectMeta(obj)
-	meta.Ancestors = ancestors
-	setObjectMeta(obj, meta)
-}
-
 func GetOwnerReferences(obj metav1.Object) []OwnerReference {
 	return getObjectMeta(obj).OwnerReferences
 }
@@ -60,7 +43,6 @@ func SetOwnerReferences(obj metav1.Object, refs []OwnerReference) {
 }
 
 type ObjectMeta struct {
-	Ancestors       []Ancestor       `json:"ancestors,omitempty"`
 	OwnerReferences []OwnerReference `json:"ownerReferences,omitempty"`
 }
 
@@ -92,6 +74,7 @@ func getObjectMeta(obj metav1.Object) *ObjectMeta {
 
 	return meta
 }
+
 func setObjectMeta(obj metav1.Object, meta *ObjectMeta) {
 	data, err := json.Marshal(meta)
 	if err != nil {

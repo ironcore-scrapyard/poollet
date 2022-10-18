@@ -15,71 +15,16 @@
 package controllerutil
 
 import (
-	"errors"
 	"fmt"
 
 	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
-
-var (
-	ErrAncestorMismatch = errors.New("ancestor mismatch")
-)
-
-// GetRootUID gets the 'root' uid of an object. The root uid is
-// * the object's own UID in case it has no ancestors (via mcmeta.GetAncestors)
-// * the first ancestor's UID
-func GetRootUID(obj metav1.Object) types.UID {
-	ancestors := mcmeta.GetAncestors(obj)
-	if len(ancestors) == 0 {
-		return obj.GetUID()
-	}
-	return ancestors[0].UID
-}
-
-func SetAncestry(clusterName string, parent, child metav1.Object) error {
-	selfAncestor := mcmeta.Ancestor{
-		ClusterName: clusterName,
-		Namespace:   parent.GetNamespace(),
-		Name:        parent.GetName(),
-		UID:         parent.GetUID(),
-	}
-
-	childAncestors := mcmeta.GetAncestors(child)
-	parentAncestors := mcmeta.GetAncestors(parent)
-
-	if noAncestors := len(childAncestors); noAncestors > 0 {
-		if expectedNoAncestors := len(parentAncestors) + 1; noAncestors != expectedNoAncestors {
-			return fmt.Errorf("%w: got %d child ancestors, expected %d", ErrAncestorMismatch, noAncestors, expectedNoAncestors)
-		}
-
-		for i := 0; i < noAncestors; i++ {
-			childAncestor := childAncestors[i]
-			var parentAncestor mcmeta.Ancestor
-			if i == noAncestors-1 {
-				parentAncestor = selfAncestor
-			} else {
-				parentAncestor = parentAncestors[i]
-			}
-			if childAncestor != parentAncestor {
-				return fmt.Errorf("%w: child ancestor %d %v is not equal to parent ancestor %v", ErrAncestorMismatch, i, childAncestor, parentAncestor)
-			}
-		}
-		return nil
-	}
-
-	childAncestors = make([]mcmeta.Ancestor, len(parentAncestors)+1)
-	copy(childAncestors, parentAncestors)
-	childAncestors[len(parentAncestors)] = selfAncestor
-	mcmeta.SetAncestors(child, childAncestors)
-	return nil
-}
 
 type AlreadyOwnedError struct {
 	Object metav1.Object
@@ -270,4 +215,30 @@ func RefersToClusterAndType(clusterName string, ownerType client.Object, ref mcm
 	actualOwnerGK := actualOwnerGV.WithKind(ref.Kind).GroupKind()
 
 	return expectedOwnerGK == actualOwnerGK, nil
+}
+
+// GetClusterTypeOwnerReferences gets the mcmeta.OwnerReferences for the given cluster name and owner type,
+// optionally filtering whether it's a controller or not.
+func GetClusterTypeOwnerReferences(clusterName string, ownerType client.Object, obj client.Object, scheme *runtime.Scheme, controller bool) ([]mcmeta.OwnerReference, error) {
+	var refs []mcmeta.OwnerReference
+	if controller {
+		if ref := mcmeta.GetControllerOf(obj); ref != nil {
+			refs = []mcmeta.OwnerReference{*ref}
+		}
+	} else {
+		refs = mcmeta.GetOwnerReferences(obj)
+	}
+
+	var filtered []mcmeta.OwnerReference
+	for _, ref := range refs {
+		ok, err := RefersToClusterAndType(clusterName, ownerType, ref, scheme)
+		if err != nil {
+			return nil, fmt.Errorf("[reference %v] %w", ref, err)
+		}
+		if ok {
+			filtered = append(filtered, ref)
+		}
+	}
+
+	return filtered, nil
 }
