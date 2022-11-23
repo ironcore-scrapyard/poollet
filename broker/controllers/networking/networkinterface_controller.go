@@ -20,9 +20,9 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/onmetal/controller-utils/clientutils"
-	commonv1alpha1 "github.com/onmetal/onmetal-api/apis/common/v1alpha1"
-	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
-	networkingv1alpha1 "github.com/onmetal/onmetal-api/apis/networking/v1alpha1"
+	commonv1alpha1 "github.com/onmetal/onmetal-api/api/common/v1alpha1"
+	computev1alpha1 "github.com/onmetal/onmetal-api/api/compute/v1alpha1"
+	networkingv1alpha1 "github.com/onmetal/onmetal-api/api/networking/v1alpha1"
 	computehelper "github.com/onmetal/poollet/api/compute/helper"
 	computepredicate "github.com/onmetal/poollet/api/compute/predicate"
 	networkingctrl "github.com/onmetal/poollet/api/networking/controller"

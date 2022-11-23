@@ -15,7 +15,7 @@
 package predicate
 
 import (
-	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+	storagev1alpha1 "github.com/onmetal/onmetal-api/api/storage/v1alpha1"
 	"github.com/onmetal/poollet/api/storage/helper"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"

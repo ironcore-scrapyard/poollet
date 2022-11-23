@@ -20,8 +20,8 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/onmetal/controller-utils/clientutils"
-	commonv1alpha1 "github.com/onmetal/onmetal-api/apis/common/v1alpha1"
-	networkingv1alpha1 "github.com/onmetal/onmetal-api/apis/networking/v1alpha1"
+	commonv1alpha1 "github.com/onmetal/onmetal-api/api/common/v1alpha1"
+	networkingv1alpha1 "github.com/onmetal/onmetal-api/api/networking/v1alpha1"
 	networkingctrl "github.com/onmetal/poollet/api/networking/controller"
 	networkingfields "github.com/onmetal/poollet/api/networking/index/fields"
 	"github.com/onmetal/poollet/broker"

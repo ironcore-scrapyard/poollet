@@ -17,9 +17,8 @@ package controller
 import (
 	"context"
 
-	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
-	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
-	"github.com/onmetal/onmetal-api/controllers/shared"
+	computev1alpha1 "github.com/onmetal/onmetal-api/api/compute/v1alpha1"
+	storagev1alpha1 "github.com/onmetal/onmetal-api/api/storage/v1alpha1"
 	computehelper "github.com/onmetal/poollet/api/compute/helper"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -72,9 +71,9 @@ func IsVolumeUsedCachedOrLive(ctx context.Context, r client.Reader, c client.Cli
 }
 
 func VolumeReconcileRequestsFromMachine(machine *computev1alpha1.Machine) []reconcile.Request {
-	volumeNames := shared.MachineSpecVolumeNames(machine)
+	volumeNames := computev1alpha1.MachineVolumeNames(machine)
 	res := make([]reconcile.Request, 0, len(volumeNames))
-	for volumeName := range volumeNames {
+	for _, volumeName := range volumeNames {
 		res = append(res, reconcile.Request{NamespacedName: client.ObjectKey{Namespace: machine.Namespace, Name: volumeName}})
 	}
 	return res

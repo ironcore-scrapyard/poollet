@@ -15,7 +15,7 @@
 package predicate
 
 import (
-	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
+	computev1alpha1 "github.com/onmetal/onmetal-api/api/compute/v1alpha1"
 	"github.com/onmetal/poollet/api/compute/helper"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"

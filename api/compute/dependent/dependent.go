@@ -17,7 +17,7 @@ package dependent
 import (
 	"context"
 
-	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
+	computev1alpha1 "github.com/onmetal/onmetal-api/api/compute/v1alpha1"
 	computehelper "github.com/onmetal/poollet/api/compute/helper"
 	computeindex "github.com/onmetal/poollet/api/compute/index"
 	computefields "github.com/onmetal/poollet/api/compute/index/fields"

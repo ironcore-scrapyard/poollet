@@ -15,8 +15,7 @@
 package helper
 
 import (
-	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
-	"github.com/onmetal/onmetal-api/controllers/shared"
+	computev1alpha1 "github.com/onmetal/onmetal-api/api/compute/v1alpha1"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -42,11 +41,11 @@ func AndMachinePredicate(predicates ...MachinePredicate) MachinePredicate {
 }
 
 func MachineSpecVolumeNames(machine *computev1alpha1.Machine) sets.String {
-	return shared.MachineSpecVolumeNames(machine)
+	return sets.NewString(computev1alpha1.MachineVolumeNames(machine)...)
 }
 
 func MachineSpecNetworkInterfaceNames(machine *computev1alpha1.Machine) sets.String {
-	return shared.MachineSpecNetworkInterfaceNames(machine)
+	return sets.NewString(computev1alpha1.MachineNetworkInterfaceNames(machine)...)
 }
 
 func MachineSpecReferencesNetworkInterfaceName(machine *computev1alpha1.Machine, nicName string) bool {

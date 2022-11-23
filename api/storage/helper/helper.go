@@ -14,7 +14,7 @@
 
 package helper
 
-import storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+import storagev1alpha1 "github.com/onmetal/onmetal-api/api/storage/v1alpha1"
 
 func VolumeRunsInVolumePool(volume *storagev1alpha1.Volume, poolName string) bool {
 	volumePoolRef := volume.Spec.VolumePoolRef

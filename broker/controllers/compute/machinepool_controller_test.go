@@ -15,7 +15,7 @@
 package compute_test
 
 import (
-	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
+	computev1alpha1 "github.com/onmetal/onmetal-api/api/compute/v1alpha1"
 	. "github.com/onmetal/onmetal-api/testutils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

@@ -21,9 +21,9 @@ import (
 
 	"github.com/onmetal/controller-utils/buildutils"
 	"github.com/onmetal/controller-utils/modutils"
-	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
-	"github.com/onmetal/onmetal-api/envtestutils"
-	"github.com/onmetal/onmetal-api/envtestutils/apiserver"
+	storagev1alpha1 "github.com/onmetal/onmetal-api/api/storage/v1alpha1"
+	"github.com/onmetal/onmetal-api/testutils/envtestutils"
+	"github.com/onmetal/onmetal-api/testutils/envtestutils/apiserver"
 	storageindex "github.com/onmetal/poollet/api/storage/index"
 	"github.com/onmetal/poollet/broker"
 	brokercluster "github.com/onmetal/poollet/broker/cluster"
@@ -120,7 +120,7 @@ var _ = BeforeSuite(func() {
 	SetClient(k8sClient)
 
 	apiSrv, err := apiserver.New(cfg, apiserver.Options{
-		MainPath:     "github.com/onmetal/onmetal-api/cmd/apiserver",
+		MainPath:     "github.com/onmetal/onmetal-api/onmetal-apiserver/cmd/apiserver",
 		BuildOptions: []buildutils.BuildOption{buildutils.ModModeMod},
 		ETCDServers:  []string{testEnv.ControlPlane.Etcd.URL.String()},
 		Host:         testEnvExt.APIServiceInstallOptions.LocalServingHost,

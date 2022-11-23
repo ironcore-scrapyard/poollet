@@ -20,11 +20,10 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/onmetal/controller-utils/clientutils"
-	commonv1alpha1 "github.com/onmetal/onmetal-api/apis/common/v1alpha1"
-	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
-	networkingv1alpha1 "github.com/onmetal/onmetal-api/apis/networking/v1alpha1"
-	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
-	"github.com/onmetal/onmetal-api/controllers/shared"
+	commonv1alpha1 "github.com/onmetal/onmetal-api/api/common/v1alpha1"
+	computev1alpha1 "github.com/onmetal/onmetal-api/api/compute/v1alpha1"
+	networkingv1alpha1 "github.com/onmetal/onmetal-api/api/networking/v1alpha1"
+	storagev1alpha1 "github.com/onmetal/onmetal-api/api/storage/v1alpha1"
 	computehelper "github.com/onmetal/poollet/api/compute/helper"
 	computefields "github.com/onmetal/poollet/api/compute/index/fields"
 	"github.com/onmetal/poollet/broker"
@@ -239,8 +238,8 @@ func (r *MachineReconciler) registerIgnitionMutation(ctx context.Context, machin
 
 	b.Add(func() {
 		target.Spec.IgnitionRef = &commonv1alpha1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{Name: targetIgnition.Name},
-			Key:                  ignitionRef.Key,
+			Name: targetIgnition.Name,
+			Key:  ignitionRef.Key,
 		}
 	})
 	return nil
@@ -260,7 +259,7 @@ func (r *MachineReconciler) machineVolumeName(machine *computev1alpha1.Machine, 
 		return machineVolume.VolumeRef.Name
 	}
 
-	return shared.MachineEphemeralVolumeName(machine.Name, machineVolume.Name)
+	return computev1alpha1.MachineEphemeralVolumeName(machine.Name, machineVolume.Name)
 }
 
 func (r *MachineReconciler) targetVolumeSource(ctx context.Context, machine *computev1alpha1.Machine, machineVolume *computev1alpha1.Volume) (src *computev1alpha1.VolumeSource, ok bool, warning string, err error) {
@@ -353,15 +352,15 @@ func (r *MachineReconciler) findMachineNetworkInterfaceStatus(machine *computev1
 	return computev1alpha1.NetworkInterfaceStatus{}, false
 }
 
-func (r *MachineReconciler) machineNetworkInterfaceName(machine *computev1alpha1.Machine, machineNic *computev1alpha1.NetworkInterface) string {
+func (r *MachineReconciler) machineNetworkInterfaceName(machine *computev1alpha1.Machine, machineNic computev1alpha1.NetworkInterface) string {
 	if machineNic.NetworkInterfaceRef != nil {
 		return machineNic.NetworkInterfaceRef.Name
 	}
 
-	return shared.MachineEphemeralNetworkInterfaceName(machine.Name, machineNic.Name)
+	return computev1alpha1.MachineNetworkInterfaceName(machine.Name, machineNic)
 }
 
-func (r *MachineReconciler) targetNetworkInterfaceSource(ctx context.Context, machine, target *computev1alpha1.Machine, machineNic *computev1alpha1.NetworkInterface) (src *computev1alpha1.NetworkInterfaceSource, ok bool, warning string, err error) {
+func (r *MachineReconciler) targetNetworkInterfaceSource(ctx context.Context, machine, target *computev1alpha1.Machine, machineNic computev1alpha1.NetworkInterface) (src *computev1alpha1.NetworkInterfaceSource, ok bool, warning string, err error) {
 	switch {
 	case machineNic.NetworkInterfaceRef != nil || machineNic.Ephemeral != nil:
 		status, ok := r.findMachineNetworkInterfaceStatus(machine, machineNic.Name)
@@ -400,7 +399,7 @@ func (r *MachineReconciler) registerNetworkInterfacesMutation(ctx context.Contex
 		warnings       []string
 	)
 	for _, machineNic := range machine.Spec.NetworkInterfaces {
-		src, ok, warning, err := r.targetNetworkInterfaceSource(ctx, machine, target, &machineNic)
+		src, ok, warning, err := r.targetNetworkInterfaceSource(ctx, machine, target, machineNic)
 		if err != nil {
 			return fmt.Errorf("[network interface %s] %w", machineNic.Name, err)
 		}
