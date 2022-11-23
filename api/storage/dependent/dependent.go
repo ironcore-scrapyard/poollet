@@ -17,7 +17,7 @@ package dependent
 import (
 	"context"
 
-	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+	storagev1alpha1 "github.com/onmetal/onmetal-api/api/storage/v1alpha1"
 	"github.com/onmetal/poollet/api/storage/controller"
 	storagehelper "github.com/onmetal/poollet/api/storage/helper"
 	storageindex "github.com/onmetal/poollet/api/storage/index"

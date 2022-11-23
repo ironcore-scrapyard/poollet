@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/onmetal/controller-utils/configutils"
-	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+	storagev1alpha1 "github.com/onmetal/onmetal-api/api/storage/v1alpha1"
 	storagedependent "github.com/onmetal/poollet/api/storage/dependent"
 	storageindex "github.com/onmetal/poollet/api/storage/index"
 	"github.com/onmetal/poollet/broker"

@@ -20,8 +20,8 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/onmetal/controller-utils/clientutils"
-	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
-	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+	computev1alpha1 "github.com/onmetal/onmetal-api/api/compute/v1alpha1"
+	storagev1alpha1 "github.com/onmetal/onmetal-api/api/storage/v1alpha1"
 	computepredicate "github.com/onmetal/poollet/api/compute/predicate"
 	storagectrl "github.com/onmetal/poollet/api/storage/controller"
 	storagefields "github.com/onmetal/poollet/api/storage/index/fields"

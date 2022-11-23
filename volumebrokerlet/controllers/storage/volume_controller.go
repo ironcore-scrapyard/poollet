@@ -20,7 +20,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/onmetal/controller-utils/clientutils"
-	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+	storagev1alpha1 "github.com/onmetal/onmetal-api/api/storage/v1alpha1"
 	storagehelper "github.com/onmetal/poollet/api/storage/helper"
 	storagefields "github.com/onmetal/poollet/api/storage/index/fields"
 	"github.com/onmetal/poollet/broker"

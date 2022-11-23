@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	networkingv1alpha1 "github.com/onmetal/onmetal-api/apis/networking/v1alpha1"
+	networkingv1alpha1 "github.com/onmetal/onmetal-api/api/networking/v1alpha1"
 	"github.com/onmetal/poollet/api/networking/index/fields"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )

@@ -20,7 +20,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/onmetal/controller-utils/clientutils"
-	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
+	computev1alpha1 "github.com/onmetal/onmetal-api/api/compute/v1alpha1"
 	computeindexclient "github.com/onmetal/poollet/api/compute/client/index"
 	computepredicate "github.com/onmetal/poollet/api/compute/predicate"
 	"github.com/onmetal/poollet/broker"

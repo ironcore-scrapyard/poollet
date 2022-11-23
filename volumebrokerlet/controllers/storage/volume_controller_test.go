@@ -15,7 +15,7 @@
 package storage_test
 
 import (
-	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+	storagev1alpha1 "github.com/onmetal/onmetal-api/api/storage/v1alpha1"
 	. "github.com/onmetal/onmetal-api/testutils"
 	mcmeta "github.com/onmetal/poollet/multicluster/meta"
 	. "github.com/onsi/ginkgo/v2"
@@ -41,7 +41,7 @@ var _ = Describe("VolumeController", func() {
 				GenerateName: "volume-",
 			},
 			Spec: storagev1alpha1.VolumeSpec{
-				VolumeClassRef: corev1.LocalObjectReference{
+				VolumeClassRef: &corev1.LocalObjectReference{
 					Name: "my-class",
 				},
 				VolumePoolRef: &corev1.LocalObjectReference{
@@ -67,7 +67,7 @@ var _ = Describe("VolumeController", func() {
 			SatisfyAll(
 				BeBrokerControlled(clusterName, volume),
 				HaveField("Spec", Equal(storagev1alpha1.VolumeSpec{
-					VolumeClassRef:     corev1.LocalObjectReference{Name: "my-class"},
+					VolumeClassRef:     &corev1.LocalObjectReference{Name: "my-class"},
 					VolumePoolSelector: targetPoolSelector,
 					Unclaimable:        true,
 					Resources: map[corev1.ResourceName]resource.Quantity{

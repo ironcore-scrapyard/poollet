@@ -14,7 +14,7 @@
 
 package helper
 
-import networkingv1alpha1 "github.com/onmetal/onmetal-api/apis/networking/v1alpha1"
+import networkingv1alpha1 "github.com/onmetal/onmetal-api/api/networking/v1alpha1"
 
 func NetworkInterfaceReferencesNetworkName(nic *networkingv1alpha1.NetworkInterface, networkName string) bool {
 	return nic.Spec.NetworkRef.Name == networkName

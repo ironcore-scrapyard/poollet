@@ -18,8 +18,8 @@ import (
 	"context"
 	"fmt"
 
-	computev1alpha1 "github.com/onmetal/onmetal-api/apis/compute/v1alpha1"
-	networkingv1alpha1 "github.com/onmetal/onmetal-api/apis/networking/v1alpha1"
+	computev1alpha1 "github.com/onmetal/onmetal-api/api/compute/v1alpha1"
+	networkingv1alpha1 "github.com/onmetal/onmetal-api/api/networking/v1alpha1"
 	computehelper "github.com/onmetal/poollet/api/compute/helper"
 	networkingindexclient "github.com/onmetal/poollet/api/networking/client/index"
 	networkinghelper "github.com/onmetal/poollet/api/networking/helper"

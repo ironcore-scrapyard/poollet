@@ -17,7 +17,7 @@ package index
 import (
 	"context"
 
-	storagev1alpha1 "github.com/onmetal/onmetal-api/apis/storage/v1alpha1"
+	storagev1alpha1 "github.com/onmetal/onmetal-api/api/storage/v1alpha1"
 	"github.com/onmetal/poollet/api/storage/helper"
 	"github.com/onmetal/poollet/api/storage/index/fields"
 	"sigs.k8s.io/controller-runtime/pkg/client"
